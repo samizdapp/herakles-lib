@@ -2,6 +2,6 @@ FROM node
 
 WORKDIR /herakles/lib
 
-Copy . .
+COPY . .
 
 CMD ["sleep", "infinity"]
