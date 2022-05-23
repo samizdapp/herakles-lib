@@ -15,5 +15,8 @@
   "bugs": {
     "url": "https://github.com/samizdapp/herakles-lib/issues"
   },
-  "homepage": "https://github.com/samizdapp/herakles-lib#readme"
+  "homepage": "https://github.com/samizdapp/herakles-lib#readme",
+  "devDependencies": {
+    "rollup": "^2.74.1"
+  }
 }
