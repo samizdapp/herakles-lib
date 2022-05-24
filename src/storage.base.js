@@ -5,6 +5,7 @@ class Storage {
   }
 
   async getItem(key) {
+    console.log("getIREM, key", this._service, key, this._namespace);
     const str = await this._service.getItem(this._namespace, key);
     return JSON.parse(str);
   }
