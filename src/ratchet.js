@@ -2,6 +2,41 @@ import DKeyRatchet from "2key-ratchet";
 import { traverse } from "object-traversal";
 import { v4 as uuidv4 } from "uuid";
 
+// we override these functions so that we can store cipher keys across restarts
+
+// static importHMAC(raw) {
+//     return getEngine().crypto.subtle
+//         .importKey("raw", raw, { name: HMAC_NAME, hash: { name: HASH_NAME } }, false, ["sign", "verify"]);
+// }
+// static importAES(raw) {
+//     return getEngine().crypto.subtle.importKey("raw", raw, AES_ALGORITHM, false, ["encrypt", "decrypt"]);
+// }
+
+// copy/pasted from definition in 2Key-ratched
+const AES_ALGORITHM = { name: "AES-CBC", length: 256 };
+const HASH_NAME = "SHA-256";
+const HMAC_NAME = "HMAC";
+
+DKeyRatchet.Secret.importHMAC = (raw) => {
+  return DKeyRatchet.getEngine().crypto.subtle.importKey(
+    "raw",
+    raw,
+    { name: HMAC_NAME, hash: { name: HASH_NAME } },
+    true,
+    ["sign", "verify"]
+  );
+};
+
+DKeyRatchet.Secret.importAES = (raw) => {
+  return DKeyRatchet.getEngine().crypto.subtle.importKey(
+    "raw",
+    raw,
+    AES_ALGORITHM,
+    true,
+    ["encrypt", "decrypt"]
+  );
+};
+
 let CryptoKey;
 const getFormatFromAlg = ({ name }) =>
   ["ECDH", "ECDSA"].includes(name) ? "jwk" : "raw";
@@ -17,14 +52,14 @@ class Ratchet {
     {
       id = 1,
       signedPreKeyAmount = 1,
-      preKeyAmount = 1,
+      preKeyAmount = 0,
       exportableKeys = true,
     } = {}
   ) {
     this._identityStore = new Storage(`${id}:identity`);
-    this._sessiontStore = new Storage(`${id}:cipher`);
+    this._cipherStore = new Storage(`${id}:cipher`);
     this._identity = null;
-    this._sessions = new Map();
+    this._ciphers = new Map();
     this._remotes = new Map();
     this._options = {
       id,
@@ -32,6 +67,36 @@ class Ratchet {
       preKeyAmount,
       exportableKeys,
     };
+  }
+
+  get id() {
+    return this._identity.id;
+  }
+
+  async importBundle(bundle) {
+    const decoded = await DKeyRatchet.PreKeyBundleProtocol.importProto(bundle);
+    const cipher = await DKeyRatchet.AsymmetricRatchet.create(
+      this._identity,
+      decoded,
+      {
+        exportableKeys: true,
+      }
+    );
+
+    return cipher;
+  }
+
+  async importMessage(proto) {
+    const decoded = await DKeyRatchet.PreKeyMessageProtocol.importProto(proto);
+    const cipher = await DKeyRatchet.AsymmetricRatchet.create(
+      this._identity,
+      decoded,
+      {
+        exportableKeys: true,
+      }
+    );
+
+    return cipher;
   }
 
   async getIdentity() {
@@ -45,25 +110,99 @@ class Ratchet {
     return this._identity;
   }
 
-  async getSession(sessionID = uuidv4()) {
-    if (this._sessions.has(sessionID)) return this._sessions.get(sessionID);
+  async getCipher(cipherID, message) {
+    if (this._ciphers.has(cipherID)) return this._ciphers.get(cipherID);
 
-    let cipher = await this._getStoredSession(sessionID);
+    let cipher = await this._getStoredCipher(cipherID);
     if (!cipher) {
-      cipher = await this._createSession(sessionID);
+      cipher = await this._createCipher(message);
     }
 
-    cipher.on("update", () => this._saveSession(sessionID, cipher));
-    this._sessions.set(sessionID, cipher);
+    cipher.on("update", () => this._saveCipher(cipherID, cipher));
+    this._ciphers.set(cipherID, cipher);
 
-    return { sessionID, cipher };
+    return cipher;
+  }
+
+  async _createCipher(message) {
+    console.log("CREATE", message);
+    return DKeyRatchet.AsymmetricRatchet.create(
+      await this.getIdentity(),
+      message,
+      {
+        exportableKeys: true,
+      }
+    );
   }
 
   async getBundle() {
     if (this._bundle) return this._bundle;
 
     this._bundle = await this._createBundle();
-    return this._bundle;
+    return this._bundle.exportProto();
+  }
+
+  async unpackBuffer(buffer) {
+    const message = await DKeyRatchet.PreKeyMessageProtocol.importProto(
+      buffer
+    ).catch((error) => {
+      // console.debug(error);
+      return DKeyRatchet.PreKeyBundleProtocol.importProto(buffer);
+    });
+
+    const id = message.identity.signingKey.id;
+
+    return { message, id };
+  }
+
+  async consumeBuffer(buffer) {
+    const { message, id } = await this.unpackBuffer(buffer);
+    await this.getCipher(id, message);
+    return id;
+  }
+
+  async encrypt(recipientID, payload) {
+    const cipher = await this.getCipher(recipientID);
+
+    console.log("GOT CIPHER", recipientID);
+
+    const proto = await cipher.encrypt(payload);
+    console.log("ENCRYPTED");
+
+    return proto.exportProto();
+  }
+
+  async decrypt(buffer) {
+    const { message, id } = await this.unpackBuffer(buffer);
+    const cipher = await this.getCipher(id, message);
+    return cipher.decrypt(message.signedMessage);
+  }
+
+  async getCipherFromMessage(signID, message) {
+    let cipher;
+
+    cipher = this._ciphers.get(signID);
+    if (cipher) return cipher;
+
+    cipher = await this.getCipherFromStorage(signID);
+
+    if (cipher) return cipher;
+
+    cipher = await DKeyRatchet.AsymmetricRatchet.create(
+      await this.getIdentity(),
+      message,
+      {
+        exportableKeys: true,
+      }
+    );
+
+    cipher.on("update", () => {
+      this._saveCipher(signID, cipher);
+    });
+
+    this._ciphers.set(signID, cipher);
+
+    return cipher;
   }
 
   async remoteIdentity() {
@@ -108,7 +247,7 @@ class Ratchet {
     identity = identity ? identity : this._identity;
     const json = await identity.toJSON();
     json.id = identity.id;
-    await this.exportKeys(json);
+    await this._exportKeys(json);
     const b64 = JSONToB64(json);
     return b64;
   }
@@ -124,43 +263,52 @@ class Ratchet {
 
   async _createBundle() {
     const identity = await this.getIdentity();
-    const preKey = identity.signedPreKeys[0];
+
     const bundle = new DKeyRatchet.PreKeyBundleProtocol();
     bundle.registrationId = identity.id;
     await bundle.identity.fill(identity);
+    const preKey = identity.signedPreKeys[0];
     bundle.preKeySigned.id = 0;
     bundle.preKeySigned.key = preKey.publicKey;
     await bundle.preKeySigned.sign(identity.signingKey.privateKey);
     return bundle;
   }
 
-  async _getStoredSession(sessionID) {
-    const raw = await this._sessionStore.getItem(sessionID);
+  async _getStoredCipher(cipherID) {
+    const raw = await this._cipherStore.getItem(cipherID);
     if (!raw) return null;
 
     const { b64 } = raw;
     const identity = await this.getIdentity();
-    const remote = await this.getRemote(sessionID);
-    return decodeCipher(identity, remote, b64);
+    const remote = await this.getRemote(cipherID);
+    return this._decodeCipher(identity, remote, b64);
   }
 
-  async _saveSession(sessionID, cipher) {
-    const b64 = await encodeCipher(cipher);
-    await this._sessions.setItem(sessionID, { b64 });
+  async _saveCipher(cipherID, cipher) {
+    await this._storeRemote(cipherID, cipher);
+    const b64 = await this._encodeCipher(cipher);
+    console.log("saveCipher", cipher);
+
+    await this._cipherStore.setItem(cipherID, { b64 });
   }
 
-  async getRemote(sessionID) {
-    if (this._remotes.has(sessionID)) return this._remotes.get(sessionID);
+  async _storeRemote(id, { remoteIdentity }) {
+    const b64 = await this._encodeIdentity(remoteIdentity);
+    await this._identityStore.setItem(id, { b64 });
+  }
 
-    const remote = await this._getStoredRemote(sessionID);
+  async getRemote(signID) {
+    if (this._remotes.has(signID)) return this._remotes.get(signID);
+
+    const remote = await this._getStoredRemote(signID);
     if (!remote) return null;
 
-    this._remotes.set(sessionID, remote);
+    this._remotes.set(signID, remote);
     return remote;
   }
 
-  async _getStoredRemote(sessionID) {
-    const raw = await this._identityStore.get(sessionID);
+  async _getStoredRemote(cipherID) {
+    const raw = await this._identityStore.getItem(cipherID);
     if (!raw) return null;
     const { b64 } = raw;
 
@@ -170,7 +318,7 @@ class Ratchet {
     const remote = await DKeyRatchet.RemoteIdentity.fromJSON(json);
     return remote;
   }
-  async exportKeys(json) {
+  async _exportKeys(json) {
     const proms = [];
     const inPlace = ({ parent, key, value, meta }) => {
       if (value instanceof CryptoKey) {
@@ -273,6 +421,30 @@ class Ratchet {
     traverse(json, inPlace);
     return Promise.all(proms);
   }
+
+  async _encodeCipher(cipher, twice = true) {
+    const json = await cipher.toJSON();
+    json.options = cipher.options;
+    json.id = cipher.id;
+
+    await this._exportKeys(json);
+    const b64 = JSONToB64(json);
+    return b64;
+  }
+
+  async _decodeCipher(identity, remote, b64) {
+    console.log("b64", b64);
+    const json = b64ToJSON(b64);
+    await this._importKeys(json);
+    const cipher = await DKeyRatchet.AsymmetricRatchet.fromJSON(
+      identity,
+      remote,
+      json
+    );
+    cipher.options = json.options;
+    cipher.id = json.id;
+    return cipher;
+  }
 }
 
 function b64ToJSON(b64) {
@@ -285,29 +457,6 @@ function JSONToB64(json) {
   const string = JSON.stringify(json);
   const b64 = Buffer.from(string).toString("base64");
   return b64;
-}
-
-async function encodeCipher(cipher, twice = true) {
-  const json = await cipher.toJSON();
-  json.options = cipher.options;
-  json.id = cipher.id;
-
-  await this.exportKeys(json);
-  const b64 = JSONToB64(json);
-  return b64;
-}
-
-async function decodeCipher(identity, remote, b64) {
-  const json = b64ToJSON(b64);
-  await importKeys(json);
-  const cipher = await DKeyRatchet.AsymmetricRatchet.fromJSON(
-    identity,
-    remote,
-    json
-  );
-  cipher.options = json.options;
-  cipher.id = json.id;
-  return { cipher };
 }
 
 export default Ratchet;

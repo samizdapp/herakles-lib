@@ -1,12 +1,6 @@
 const keytar = require("keytar");
 
-const stores = [
-  "server_session",
-  "client_session",
-  "client_session_index",
-  "client_remote",
-  "server_remote",
-];
+const stores = ["1:identity", "1:cipher", "2:identity", "2:cipher"];
 
 async function main() {
   const res = [];
