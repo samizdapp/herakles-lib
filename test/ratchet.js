@@ -20,7 +20,7 @@ async function main() {
   const b2a = await bob.encrypt(id, Buffer.from("hey alice"));
   // Create Bob's cipher
   console.log("got bob cipher", b2a);
-  // process.exit(0);
+  process.exit(0);
   const aFromB = await alice.decrypt(b2a);
 
   console.log("decrypted", Buffer.from(aFromB).toString());

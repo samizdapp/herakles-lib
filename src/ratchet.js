@@ -110,6 +110,11 @@ class Ratchet {
     return this._identity;
   }
 
+  async persistCipher(id, cipher) {
+    cipher.on("update", () => this._saveCipher(id, cipher));
+    return this._saveCipher(id, cipher);
+  }
+
   async getCipher(cipherID, message) {
     if (this._ciphers.has(cipherID)) return this._ciphers.get(cipherID);
 
@@ -118,7 +123,7 @@ class Ratchet {
       cipher = await this._createCipher(message);
     }
 
-    cipher.on("update", () => this._saveCipher(cipherID, cipher));
+    await this.persistCipher(cipherID, cipher);
     this._ciphers.set(cipherID, cipher);
 
     return cipher;
@@ -196,9 +201,7 @@ class Ratchet {
       }
     );
 
-    cipher.on("update", () => {
-      this._saveCipher(signID, cipher);
-    });
+    await this.persistCipher(signID, cipher);
 
     this._ciphers.set(signID, cipher);
 
