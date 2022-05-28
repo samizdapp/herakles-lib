@@ -11,23 +11,40 @@ async function main() {
   const a = await alice.getIdentity();
   const b = await bob.getIdentity();
 
-  console.log(a, b);
+  // console.log(a, b);
   const aliceBundle = await alice.getBundle();
 
   const id = await bob.consumeBuffer(aliceBundle);
 
-  console.log("exit?");
+  console.log("exit?", id);
+  // process.exit();
   const b2a = await bob.encrypt(id, Buffer.from("hey alice"));
   // Create Bob's cipher
   console.log("got bob cipher", b2a);
-  process.exit(0);
+  // process.exit(0);
+  const bobID = await alice.getIDFromMessage(b2a);
   const aFromB = await alice.decrypt(b2a);
 
   console.log("decrypted", Buffer.from(aFromB).toString());
-  // const decrypted = await alice.decrypt(b2a);
-  // console.log("alice decrypted", decrypted);
+  console.log("BOB id", bobID);
+  bob._ciphers.delete(id);
+  alice._ciphers.delete(bobID);
+  let a2b = await alice.encrypt(bobID, Buffer.from("hello bob"));
 
-  process.exit(0);
+  let a22b = await bob.decrypt(a2b);
+  console.log("bob decrypted", Buffer.from(a22b).toString());
+
+  a2b = await alice.encrypt(bobID, Buffer.from("hello bob 2"));
+
+  a22b = await bob.decrypt(a2b);
+  console.log("bob decrypted", Buffer.from(a22b).toString());
+
+  a2b = await alice.encrypt(bobID, Buffer.from("hello bob 3"));
+
+  a22b = await bob.decrypt(a2b);
+  console.log("bob decrypted", Buffer.from(a22b).toString());
+
+  return;
   // const BobCipher = cipher;
   // // Encrypt message for Alice
   // const BobMessageProto = await BobCipher.encrypt(Buffer.from("Hello Alice!!"));
