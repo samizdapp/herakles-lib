@@ -44,10 +44,10 @@ async function main() {
   a22b = await bob.decrypt(a2b);
   console.log("bob decrypted", Buffer.from(a22b).toString());
 
-  a2b = await bob.encrypt(bobID, Buffer.from("hello alice 4"));
+  a2b = await bob.encrypt(id, Buffer.from("hello alice 4"));
 
   a22b = await alice.decrypt(a2b);
-  console.log("alice decrypted", Buffer.from(a22b).toString());
+  console.log("alice decrypted", id, Buffer.from(a22b).toString());
 
   return;
   // const BobCipher = cipher;
