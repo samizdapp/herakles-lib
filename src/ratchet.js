@@ -145,7 +145,7 @@ class Ratchet {
   }
 
   async getBundle() {
-    if (this._bundle) return this._bundle;
+    if (this._bundle) return this._bundle.exportProto();
 
     this._bundle = await this._createBundle();
     return this._bundle.exportProto();
@@ -291,6 +291,7 @@ class Ratchet {
 
     const bundle = new DKeyRatchet.PreKeyBundleProtocol();
     bundle.registrationId = identity.id;
+    console.log("ID?", bundle.registrationId, identity.id);
     await bundle.identity.fill(identity);
     const preKey = identity.signedPreKeys[0];
     bundle.preKeySigned.id = 0;
