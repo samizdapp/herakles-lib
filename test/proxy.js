@@ -10,13 +10,12 @@ async function main() {
 
   p.listen();
 
-  // let res = await fetch("http://localhost:3000", {
-  //   method: "GET",
-  // });
-  // let buffer = await res.arrayBuffer();
-  let res;
-  const proxyID =
-    "a9527eae0571b78db185f0c65919800b74055710e48ec328cf21f2b99bbbf73c";
+  let res = await fetch("http://localhost:3000", {
+    method: "GET",
+  });
+  let buffer = await res.arrayBuffer();
+
+  const proxyID = await clientRatchet.consumeBuffer(buffer);
 
   console.log(proxyID);
   // process.exit(0);
@@ -25,7 +24,7 @@ async function main() {
     url: "/setup/chrome",
   });
 
-  let buffer = await clientRatchet.encrypt(proxyID, request);
+  buffer = await clientRatchet.encrypt(proxyID, request);
 
   res = await fetch("http://localhost:3000", {
     method: "POST",
