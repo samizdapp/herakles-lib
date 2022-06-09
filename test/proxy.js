@@ -10,6 +10,7 @@ async function main() {
 
   p.listen();
 
+  return;
   let res = await fetch("http://localhost:3000", {
     method: "GET",
   });

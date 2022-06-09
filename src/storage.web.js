@@ -33,6 +33,7 @@ class WebStorageService extends LocalStorageService {
     if (result) return result;
 
     result = await this.request(namespace, key, value);
+    return result;
   }
 
   async doJob({ type, action, request, value }) {

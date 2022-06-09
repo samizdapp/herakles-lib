@@ -17,14 +17,21 @@ class Storage {
 class LocalStorageService {
   constructor(service) {
     this.localStorage = service;
+    this._job = Promise.resolve();
   }
 
   async setItem(namespace, key, value) {
-    return this._setItem(namespace, key, value);
+    const prom = (this._job = this._job.then(() =>
+      this._setItem(namespace, key, value)
+    ));
+    return prom;
   }
 
   async getItem(namespace, key) {
-    return this._getItem(namespace, key);
+    const prom = (this._job = this._job.then(() =>
+      this._getItem(namespace, key)
+    ));
+    return prom;
   }
 
   async _setItem(namespace, key, value) {

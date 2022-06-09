@@ -1,17 +1,15 @@
 import Storage, { LocalStorageService } from "./storage.base";
-
-const STORAGE_REQUEST = "STORAGE_REQUEST";
-const STORAGE_RESPONSE = "STORAGE_RESPONSE";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 class ExpoStorageService extends LocalStorageService {
-  constructor(AsyncStorage) {
+  constructor() {
     super(AsyncStorage);
   }
 }
 
 class ExpoStorage extends Storage {
-  constructor(namespace, AsyncStorage) {
-    super(namespace, new ExpoStorageService(AsyncStorage));
+  constructor(namespace) {
+    super(namespace, new ExpoStorageService());
   }
 
   async doJob({ action, request, value }, postMessage) {

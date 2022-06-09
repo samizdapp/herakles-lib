@@ -20,7 +20,7 @@ async function main() {
   console.log("PATCH FETCH", fetchIntercept);
   client.patchFetch(fetchIntercept, fetch);
 
-  const res = await fetch("http://localhost/clock").catch((e) => {
+  const res = await fetch("http://localhost/setup/chrome").catch((e) => {
     console.log(e);
   });
   const body = await res.text();

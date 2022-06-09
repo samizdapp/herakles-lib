@@ -1,5 +1,5 @@
-import keytar from "keytar";
-import Storage from "./storage.base";
+import Storage, { LocalStorageService } from "./storage.base";
+import { LocalStorage } from "node-localstorage";
 
 class KeytarStorage {
   constructor(keytar) {
@@ -24,7 +24,8 @@ class KeytarStorage {
 
 class NodeStorage extends Storage {
   constructor(namespace) {
-    super(namespace, new KeytarStorage(keytar));
+    const localStorage = new LocalStorage("./scratch");
+    super(namespace, new LocalStorageService(localStorage));
   }
 }
 

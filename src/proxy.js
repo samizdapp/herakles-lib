@@ -38,12 +38,14 @@ export default class RatchetProxy {
     const buffer = await this._getBody(req);
     const rd = await this._ratchet.getIDFromMessage(buffer);
     const packet = await this._ratchet.decrypt(buffer);
-    const {
+    let {
       json: { reqObj, reqInit },
       body,
     } = decode(Buffer.from(packet));
-
-    console.log("url?");
+    if (typeof reqObj === "string" && !reqObj.startsWith("http:")) {
+      reqObj = `http://daemon_caddy${reqObj}`;
+    }
+    console.log("url?", reqObj, reqInit);
     // reqObj.body = body;
 
     const fres = await fetch(reqObj, reqInit);

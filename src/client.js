@@ -6,6 +6,10 @@ export default class RatchetClient {
     this._ratchet = new Ratchet(Storage, { id });
     this._host = host;
     this._storage = new Storage(namespace);
+    if (global.fetch) {
+      this._fetch = global.fetch;
+    }
+    this._fetchJob = Promise.resolve();
   }
 
   async getServerID() {
@@ -62,6 +66,7 @@ export default class RatchetClient {
   }
 
   async _getServerIDFromServer() {
+    console.log("_getServerIDFromServer()", this._host);
     const res = await this._fetch(`http://${this._host}`);
     const buffer = await res.arrayBuffer();
 
@@ -97,8 +102,6 @@ export default class RatchetClient {
   }
 
   async patchFetch() {
-    this._fetch = global.fetch;
-
     global.fetch = async (reqObj, reqInit) => {
       console.log("patched fetch", reqObj, reqInit);
       const body = await this.encryptFetch(reqObj, reqInit);
@@ -113,54 +116,27 @@ export default class RatchetClient {
       console.log("decrypted response", resp);
       return new Response(resp.body, resp.json);
     };
+  }
 
-    // Register request interceptor middleware:
-    // interceptor.interceptors.request.use((req, next, reject) => {
-    //   console.log("Global request interceptor", req);
-    //   next({
-    //     ...req,
-    //     headers: { ...req.headers, myHeader: "mycustom-header" },
-    //   });
-    // });
-    // interceptor.register({
-    //   request: async (_url, _config) => {
-    //     // Modify the url or config here
-    //     if (_url.indexOf(this._host) >= 0) {
-    //       return [_url, _config];
-    //     }
-    //     console.log("interceptor", _url, _config);
-    //     const body = await this.encryptFetch(_url, _config);
+  async patchFetchBrowser() {
+    this._fetch = window.fetch.bind(window);
+    window.fetch = async (reqObj, reqInit) => {
+      console.log("patched fetch", reqObj, reqInit);
+      this._fetchJob = this._fetchJob.then(async () => {
+        const body = await this.encryptFetch(reqObj, reqInit);
+        const config = {
+          method: "POST",
+          body,
+        };
+        const outer = await this._fetch(`http://${this._host}`, config);
+        const outerb = await outer.arrayBuffer();
+        const innerb = await this.decryptFetchResponse(Buffer.from(outerb));
+        const resp = decode(Buffer.from(innerb));
+        console.log("decrypted response", resp);
+        return new Response(resp.body, resp.json);
+      });
 
-    //     const config = {
-    //       method: "POST",
-    //       body,
-    //     };
-    //     console.log("modified fetch");
-    //     return [`http://${this._host}`, config];
-    //   },
-
-    //   requestError: function (error) {
-    //     // Called when an error occured during another 'request' interceptor call
-    //     return Promise.reject(error);
-    //   },
-
-    //   response: async (response) => {
-    //     // Modify the reponse object
-    //     if (response.request.method === "GET") {
-    //       console.log("RESPONSE", response);
-    //       return response;
-    //     }
-    //     const packet = await response.arrayBuffer();
-    //     const { json, body } = await decode(Buffer.from(packet));
-    //     console.log("decrypted response", json, body.toString());
-    //     const newResponse = new Response(body.toString(), json);
-    //     return newResponse;
-    //   },
-
-    //   responseError: function (error) {
-    //     // Handle an fetch error
-    //     return Promise.reject(error);
-    //   },
-    // });
+      return this._fetchJob;
+    };
   }
 }
