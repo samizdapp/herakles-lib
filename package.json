@@ -18,15 +18,33 @@
   "homepage": "https://github.com/samizdapp/herakles-lib#readme",
   "devDependencies": {
     "@peculiar/webcrypto": "^1.4.0",
-    "rollup": "^2.74.1"
+    "@rollup/plugin-commonjs": "^22.0.0",
+    "@rollup/plugin-node-resolve": "^13.3.0",
+    "@rollup/plugin-replace": "^4.0.0",
+    "metro-config": "^0.71.0",
+    "rollup": "^2.74.1",
+    "rollup-plugin-node-polyfills": "^0.2.1"
   },
   "dependencies": {
     "2key-ratchet": "^1.0.18",
+    "cross-fetch": "^3.1.5",
+    "es-fetch-interceptor": "^1.0.2",
+    "external-ip": "^2.3.1",
+    "fetch-intercept": "^2.4.0",
+    "isomorphic-webcrypto": "^2.3.8",
     "json-diff": "^0.7.4",
     "keytar": "^7.9.0",
     "lob-enc": "^0.0.17",
+    "localforage": "^1.10.0",
+    "my-local-ip-is": "^1.0.7",
     "node-fetch": "^2.6.7",
+    "node-localstorage": "^2.2.1",
     "object-traversal": "^1.0.1",
+    "pocket-messaging": "^1.0.2",
+    "pocket-sockets": "^1.1.1",
+    "public-ip": "^6.0.0",
+    "rollup-plugin-node-builtins": "^2.1.2",
+    "rollup-plugin-node-globals": "^1.4.0",
     "uuid": "^8.3.2"
   }
 }

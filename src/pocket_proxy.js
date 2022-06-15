@@ -2,9 +2,21 @@ import { decode, encode } from "lob-enc";
 import { WSServer, WSClient, Client } from "pocket-sockets";
 import { Messaging, once } from "pocket-messaging";
 import fetch from "cross-fetch";
+import getExternalIpCB from "external-ip";
+import getLocalIp from "my-local-ip-is";
+
+const ipGetter = getExternalIpCB();
+
+const getExternalIp = async () =>
+  new Promise((resolve, reject) => {
+    ipGetter((err, ip) => {
+      if (err) return reject(err);
+      resolve(ip);
+    });
+  });
 
 export default class PocketProxy {
-  constructor(host = "0.0.0.0", port = 3000) {
+  constructor({ host = "0.0.0.0", port = 3000, lan = "127.0.0.1" }) {
     this._server = new WSServer({
       host,
       port,
@@ -17,6 +29,11 @@ export default class PocketProxy {
       const eventEmitter = messaging.getEventEmitter();
       while (true) {
         const event = await once(eventEmitter, "route");
+        // if (event.target === "address") {
+        const wan = await getExternalIp();
+        console.log("lanwan", lan, wan);
+        // }
+
         let {
           json: { reqObj, reqInit },
           body,
@@ -24,11 +41,18 @@ export default class PocketProxy {
         if (typeof reqObj === "string" && !reqObj.startsWith("http:")) {
           reqObj = `http://daemon_caddy${reqObj}`;
         }
-        console.log("url?", reqObj, reqInit);
-
+        console.log("url?", event, reqObj, reqInit);
+        reqInit = reqInit || {};
+        if (
+          reqInit.method &&
+          reqInit.method !== "HEAD" &&
+          reqInit.method !== "GET"
+        ) {
+          reqInit.body = body;
+        }
         const fres = await fetch(reqObj, reqInit);
         const resb = await fres.arrayBuffer();
-        const forward = encode(fres, Buffer.from(resb));
+        const forward = encode({ res: fres, lan, wan }, Buffer.from(resb));
         console.log("got forward", forward);
         const eventEmitterSend = messaging.send(event.fromMsgId, forward);
       }
