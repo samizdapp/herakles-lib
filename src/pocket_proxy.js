@@ -7,6 +7,24 @@ import getLocalIp from "my-local-ip-is";
 
 const ipGetter = getExternalIpCB();
 
+const getHeadersJSON = (h) => {
+  const ret = {};
+  for (const pair of h.entries()) {
+    ret[pair[0]] = pair[1];
+  }
+  return ret;
+};
+
+const getResponseJSON = (r) => ({
+  ok: r.ok,
+  headers: getHeadersJSON(r.headers),
+  redirected: r.redirected,
+  status: r.status,
+  statusText: r.statusText,
+  type: r.type,
+  url: r.url,
+});
+
 const getExternalIp = async () =>
   new Promise((resolve, reject) => {
     ipGetter((err, ip) => {
@@ -38,7 +56,7 @@ export default class PocketProxy {
           json: { reqObj, reqInit },
           body,
         } = decode(event.data);
-        if (typeof reqObj === "string" && !reqObj.startsWith("http:")) {
+        if (typeof reqObj === "string" && !reqObj.startsWith("http")) {
           reqObj = `http://daemon_caddy${reqObj}`;
         }
         console.log("url?", event, reqObj, reqInit);
@@ -52,8 +70,9 @@ export default class PocketProxy {
         }
         const fres = await fetch(reqObj, reqInit);
         const resb = await fres.arrayBuffer();
-        const forward = encode({ res: fres, lan, wan }, Buffer.from(resb));
-        console.log("got forward", forward);
+        const res = getResponseJSON(fres);
+        const forward = encode({ res, lan, wan }, Buffer.from(resb));
+        console.log("got forward", res);
         const eventEmitterSend = messaging.send(event.fromMsgId, forward);
       }
     });

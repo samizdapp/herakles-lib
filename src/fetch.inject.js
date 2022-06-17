@@ -8,9 +8,7 @@ async function patchFetch(host, port) {
     }
   });
 
-  await client.init();
-
   client.patchFetchBrowser();
 }
 
-patchFetch(window.location.host, 3000);
+patchFetch(window.location.hostname, 3000);
