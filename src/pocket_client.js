@@ -54,27 +54,19 @@ class ClientManager {
 
         client = new Messaging(_client);
 
-        const { eventEmitter } = _client.send(
-          "handshake",
-          Buffer.from(""),
-          0,
-          true
-        );
-        const serverkey = await once(eventEmitter, "reply");
-        const dis = await once(eventEmitter, "reply");
-        alert(
-          "got replies? " +
-            serverkey.data.toString() +
-            " " +
-            dis.data.toString()
-        );
+        const { skey, dis } = await new Promise((resolve, reject) => {
+          _client.onData((buf) => {
+            return JSON.parse(buf.toString());
+          });
+          _client.sendString("handshake");
+        });
 
         const hs = await HandshakeAsClient(
           _client,
           this.keyPairClient.secretKey,
           this.keyPairClient.publicKey,
-          serverkey.data,
-          dis.data,
+          Buffer.from(skey, "base64"),
+          Buffer.from(dis),
           Buffer.from("hello")
         );
         alert("client hs finished");
