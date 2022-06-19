@@ -54,7 +54,7 @@ class ClientManager {
 
         client = new Messaging(_client);
 
-        const { eventEmitter } = client.send(
+        const { eventEmitter } = _client.send(
           "handshake",
           Buffer.from(""),
           0,
