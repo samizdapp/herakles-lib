@@ -1,6 +1,6 @@
 import { encode, decode } from "lob-enc";
 import { WSClient } from "pocket-sockets";
-import { Messaging, once } from "pocket-messaging";
+import { Messaging, once, init, genKeyPair } from "pocket-messaging";
 
 const CHUNK_SIZE = 65535;
 
@@ -29,6 +29,11 @@ class ClientManager {
     this._addresses.add(address);
   }
 
+  async init() {
+    await init();
+    this.keyPairClient = await genKeyPair();
+  }
+
   async createClient(address) {
     return new Promise((resolve, reject) => {
       console.log("create Client", address, this._port);
@@ -40,7 +45,20 @@ class ClientManager {
 
       _client.onConnect(async () => {
         console.log("onConnect");
+        // const hs = await HandshakeAsClient(
+        //   _client,
+        //   this.keyPairClient.secretKey,
+        //   this.keyPairClient.publicKey,
+        //   "discriminator"
+        // );
         client = new Messaging(_client);
+        // client.setEncrypted(
+        //   hs.clientToServerKey,
+        //   hs.clientNonce,
+        //   hs.serverToClientKey,
+        //   hs.serverNonce,
+        //   hs.peerLongtermPk
+        // );
         client.open();
         client.address = address;
         // alert(`resolve ${address}`);
@@ -120,6 +138,10 @@ export default class PocketClient {
     this.onAddress = onAddress;
     this._job = Promise.resolve();
     this._lastAddress = host;
+  }
+
+  async init() {
+    this._clientManager.init();
   }
 
   async patchFetch() {

@@ -7,7 +7,7 @@ async function patchFetch(host, port) {
       window.ReactNativeWebView.postMessage(JSON.stringify({ lan, wan }));
     }
   });
-
+  await client.init();
   client.patchFetchBrowser();
 }
 

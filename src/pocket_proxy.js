@@ -1,6 +1,12 @@
 import { decode, encode } from "lob-enc";
 import { WSServer, WSClient, Client } from "pocket-sockets";
-import { Messaging, once } from "pocket-messaging";
+import {
+  HandshakeAsServer,
+  Messaging,
+  init,
+  genKeyPair,
+  once,
+} from "pocket-messaging";
 import fetch from "cross-fetch";
 import getExternalIpCB from "external-ip";
 
@@ -44,7 +50,21 @@ export default class PocketProxy {
     });
 
     this._server.onConnection(async (client) => {
+      // const hs = await HandshakeAsServer(
+      //   client,
+      //   this.keyPairServer.secretKey,
+      //   this.keyPairServer.publicKey,
+      //   "discriminator"
+      // );
+
       let messaging = new Messaging(client);
+      // messaging.setEncrypted(
+      //   hs.clientToServerKey,
+      //   hs.clientNonce,
+      //   hs.serverToClientKey,
+      //   hs.serverNonce,
+      //   hs.peerLongtermPk
+      // );
       messaging.open();
 
       const eventEmitter = messaging.getEventEmitter();
@@ -57,6 +77,11 @@ export default class PocketProxy {
     });
 
     this._server.listen();
+  }
+
+  async init() {
+    await init();
+    this.keyPairServer = await genKeyPair();
   }
 
   async handleEvent(messaging, event) {
