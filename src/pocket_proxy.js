@@ -61,18 +61,19 @@ export default class PocketProxy {
 
   async handleEvent(messaging, event) {
     console.log("handle event", event.data.length, event.data.byteLength);
-    // const target = event.target;
-    // const chunks = this._pending.get(target) || [];
-    // this._pending.set(target, chunks);
-    // chunks.push(event.data);
+    const target = event.target;
+    const chunks = this._pending.get(target) || [];
+    chunks.push(event.data);
+    this._pending.set(target, chunks);
 
-    // if (!event.expectingReply) {
+    // if (event.data.length > 0) {
     //   console.log("waiting for null chunk");
+    //   messaging.send(event.fromMsgId, Buffer.from(""));
     //   return;
     // }
 
     console.log("hadling request");
-    // this._pending.delete(target);
+    this._pending.delete(target);
     const lan = this._lan;
 
     const wan = await getExternalIp();

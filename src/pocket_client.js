@@ -3,11 +3,17 @@ import { WSClient } from "pocket-sockets";
 import { Messaging, once } from "pocket-messaging";
 
 const CHUNK_SIZE = 65535;
-function uuidv4() {
-  var temp_url = URL.createObjectURL(new Blob());
-  var uuid = temp_url.toString();
-  URL.revokeObjectURL(temp_url);
-  return uuid.substr(uuid.lastIndexOf("/") + 1); // remove prefix (e.g. blob:null/, blob:www.test.com/, ...)
+
+function getRandomArbitrary(min, max) {
+  return Math.random() * (max - min) + min;
+}
+
+function randomRoute() {
+  let r = "";
+  for (let i = 0; i < 4; i++) {
+    r += String.fromCharCode(getRandomArbitrary(97, 122));
+  }
+  return r;
 }
 
 class ClientManager {
@@ -60,7 +66,7 @@ class ClientManager {
 
   async getClientFromAddress(address, attempt = 0) {
     let client = this._clients.get(address);
-    if (client) {
+    if (client && !client.isClosed) {
       return client;
     }
 
@@ -163,13 +169,30 @@ export default class PocketClient {
     const client = await this._clientManager.getClient();
     // alert(`fetching from ${client.address}`);
     console.log("pocketfetch3", client);
-    const uuid = uuidv4().split("-")[0];
+    const uuid = randomRoute(); //Math.random().toString(36).slice(2).slice(0, 6); // short lived id, don't need hard unique constraints
     // let i = 0;
     // for (; i < Math.floor(packet.length / CHUNK_SIZE); i++) {
-    //   client.send(uuid, packet.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE));
+    //   const { eventEmitter } = client.send(
+    //     uuid,
+    //     packet.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE),
+    //     xhr.timeout || 60000,
+    //     true
+    //   );
+    //   await once(eventEmitter, "reply");
     // }
 
-    let eventEmitter = client.send("ping", packet, xhr.timeout || 60000, true);
+    // alert(uuid);
+    // alert("last chunk " + i);
+    // let eventEmitter = client.send(
+    //   uuid,
+    //   packet.slice(i * CHUNK_SIZE),
+    //   xhr.timeout || 60000,
+    //   true
+    // );
+    // await once(eventEmitter.eventEmitter, "reply");
+    // alert("chunk reply");
+    console.log("uuid?", uuid);
+    let eventEmitter = client.send(uuid, packet, xhr.timeout || 60000, true);
     console.log("pocketFetch4", eventEmitter, eventEmitter.msgId);
 
     if (eventEmitter) {
@@ -179,7 +202,7 @@ export default class PocketClient {
       do {
         const chunk = await once(eventEmitter, "reply");
         console.log("chunk", uuid, chunk);
-        chunks.push(chunk.data);
+        chunks.push(Buffer.from(chunk.data));
         clen = chunk.data.length;
       } while (clen > 0);
       console.log("concat reply", chunks);
