@@ -1,6 +1,12 @@
 import { encode, decode } from "lob-enc";
 import { WSClient } from "pocket-sockets";
-import { Messaging, once, init, genKeyPair } from "pocket-messaging";
+import {
+  Messaging,
+  once,
+  init,
+  genKeyPair,
+  HandshakeAsClient,
+} from "pocket-messaging";
 
 const CHUNK_SIZE = 65535;
 
@@ -45,13 +51,34 @@ class ClientManager {
 
       _client.onConnect(async () => {
         console.log("onConnect");
+
+        client = new Messaging(_client);
+
+        client.open();
+        // const { eventEmitter } = client.send(
+        //   "handshake",
+        //   Buffer.from(""),
+        //   0,
+        //   true
+        // );
+        // const serverkey = await once(eventEmitter, "reply");
+        // const dis = await once(eventEmitter, "reply");
+        // alert(
+        //   "got replies? " +
+        //     serverkey.data.toString() +
+        //     " " +
+        //     dis.data.toString()
+        // );
+
         // const hs = await HandshakeAsClient(
         //   _client,
         //   this.keyPairClient.secretKey,
         //   this.keyPairClient.publicKey,
-        //   "discriminator"
+        //   serverkey.data,
+        //   dis.data,
+        //   Buffer.from("hello")
         // );
-        client = new Messaging(_client);
+        // alert("client hs finished");
         // client.setEncrypted(
         //   hs.clientToServerKey,
         //   hs.clientNonce,
@@ -59,7 +86,7 @@ class ClientManager {
         //   hs.serverNonce,
         //   hs.peerLongtermPk
         // );
-        client.open();
+
         client.address = address;
         // alert(`resolve ${address}`);
         resolve(client);
