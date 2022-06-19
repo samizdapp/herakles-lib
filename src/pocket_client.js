@@ -54,7 +54,6 @@ class ClientManager {
 
         client = new Messaging(_client);
 
-        client.open();
         // const { eventEmitter } = client.send(
         //   "handshake",
         //   Buffer.from(""),
@@ -86,6 +85,7 @@ class ClientManager {
         //   hs.serverNonce,
         //   hs.peerLongtermPk
         // );
+        client.open();
 
         client.address = address;
         // alert(`resolve ${address}`);

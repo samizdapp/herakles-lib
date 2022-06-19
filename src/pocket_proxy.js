@@ -52,8 +52,6 @@ export default class PocketProxy {
     this._server.onConnection(async (client) => {
       let messaging = new Messaging(client);
 
-      messaging.open();
-
       const eventEmitter = messaging.getEventEmitter();
       // const evt = await once(eventEmitter, "route");
       // if (evt.target !== "handshake") {
@@ -88,6 +86,8 @@ export default class PocketProxy {
       //   hs.serverNonce,
       //   hs.peerLongtermPk
       // );
+
+      messaging.open();
 
       eventEmitter.on("route", (event) => {
         console.log("got route event?", event);
