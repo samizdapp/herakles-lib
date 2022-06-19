@@ -55,7 +55,7 @@ export default class PocketProxy {
       messaging.open();
 
       const eventEmitter = messaging.getEventEmitter();
-      const evt = await once(eventEmitter, "route");
+      // const evt = await once(eventEmitter, "route");
       // if (evt.target !== "handshake") {
       //   throw new Error("expected handshake");
       // }
