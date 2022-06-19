@@ -54,37 +54,37 @@ class ClientManager {
 
         client = new Messaging(_client);
 
-        // const { eventEmitter } = client.send(
-        //   "handshake",
-        //   Buffer.from(""),
-        //   0,
-        //   true
-        // );
-        // const serverkey = await once(eventEmitter, "reply");
-        // const dis = await once(eventEmitter, "reply");
-        // alert(
-        //   "got replies? " +
-        //     serverkey.data.toString() +
-        //     " " +
-        //     dis.data.toString()
-        // );
+        const { eventEmitter } = client.send(
+          "handshake",
+          Buffer.from(""),
+          0,
+          true
+        );
+        const serverkey = await once(eventEmitter, "reply");
+        const dis = await once(eventEmitter, "reply");
+        alert(
+          "got replies? " +
+            serverkey.data.toString() +
+            " " +
+            dis.data.toString()
+        );
 
-        // const hs = await HandshakeAsClient(
-        //   _client,
-        //   this.keyPairClient.secretKey,
-        //   this.keyPairClient.publicKey,
-        //   serverkey.data,
-        //   dis.data,
-        //   Buffer.from("hello")
-        // );
-        // alert("client hs finished");
-        // client.setEncrypted(
-        //   hs.clientToServerKey,
-        //   hs.clientNonce,
-        //   hs.serverToClientKey,
-        //   hs.serverNonce,
-        //   hs.peerLongtermPk
-        // );
+        const hs = await HandshakeAsClient(
+          _client,
+          this.keyPairClient.secretKey,
+          this.keyPairClient.publicKey,
+          serverkey.data,
+          dis.data,
+          Buffer.from("hello")
+        );
+        alert("client hs finished");
+        client.setEncrypted(
+          hs.clientToServerKey,
+          hs.clientNonce,
+          hs.serverToClientKey,
+          hs.serverNonce,
+          hs.peerLongtermPk
+        );
         client.open();
 
         client.address = address;

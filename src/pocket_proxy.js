@@ -53,39 +53,39 @@ export default class PocketProxy {
       let messaging = new Messaging(client);
 
       const eventEmitter = messaging.getEventEmitter();
-      // const evt = await once(eventEmitter, "route");
-      // if (evt.target !== "handshake") {
-      //   throw new Error("expected handshake");
-      // }
+      const evt = await once(eventEmitter, "route");
+      if (evt.target !== "handshake") {
+        throw new Error("expected handshake");
+      }
 
-      // const dis = `${Math.random()}`;
+      const dis = `${Math.random()}`;
 
-      // console.log("init handshake", this.keyPairServer, dis);
-      // messaging.send(evt.fromMsgId, this.keyPairServer.publicKey);
-      // messaging.send(evt.fromMsgId, Buffer.from(dis));
+      console.log("init handshake", this.keyPairServer, dis);
+      messaging.send(evt.fromMsgId, this.keyPairServer.publicKey);
+      messaging.send(evt.fromMsgId, Buffer.from(dis));
 
-      // console.log("sent key and dis");
-      // const hs = await HandshakeAsServer(
-      //   client,
-      //   this.keyPairServer.secretKey,
-      //   this.keyPairServer.publicKey,
-      //   Buffer.from(dis)
-      // ).catch((e) => {
-      //   console.log(e);
-      //   process.exit(1);
-      // });
+      console.log("sent key and dis");
+      const hs = await HandshakeAsServer(
+        client,
+        this.keyPairServer.secretKey,
+        this.keyPairServer.publicKey,
+        Buffer.from(dis)
+      ).catch((e) => {
+        console.log(e);
+        process.exit(1);
+      });
 
-      // console.log("finish server handshake");
+      console.log("finish server handshake");
 
-      // console.log("hs res", hs);
+      console.log("hs res", hs);
 
-      // messaging.setEncrypted(
-      //   hs.clientToServerKey,
-      //   hs.clientNonce,
-      //   hs.serverToClientKey,
-      //   hs.serverNonce,
-      //   hs.peerLongtermPk
-      // );
+      messaging.setEncrypted(
+        hs.clientToServerKey,
+        hs.clientNonce,
+        hs.serverToClientKey,
+        hs.serverNonce,
+        hs.peerLongtermPk
+      );
 
       messaging.open();
 
