@@ -3,7 +3,8 @@ import { WSServer, WSClient, Client } from "pocket-sockets";
 import { Messaging, once } from "pocket-messaging";
 import fetch from "cross-fetch";
 import getExternalIpCB from "external-ip";
-import getLocalIp from "my-local-ip-is";
+
+const CHUNK_SIZE = 65535;
 
 const ipGetter = getExternalIpCB();
 
@@ -35,6 +36,8 @@ const getExternalIp = async () =>
 
 export default class PocketProxy {
   constructor({ host = "0.0.0.0", port = 3000, lan = "127.0.0.1" }) {
+    this._lan = lan;
+    this._pending = new Map();
     this._server = new WSServer({
       host,
       port,
@@ -45,38 +48,66 @@ export default class PocketProxy {
       messaging.open();
 
       const eventEmitter = messaging.getEventEmitter();
-      while (true) {
-        const event = await once(eventEmitter, "route");
-        // if (event.target === "address") {
-        const wan = await getExternalIp();
-        console.log("lanwan", lan, wan);
-        // }
-
-        let {
-          json: { reqObj, reqInit },
-          body,
-        } = decode(event.data);
-        if (typeof reqObj === "string" && !reqObj.startsWith("http")) {
-          reqObj = `http://daemon_caddy${reqObj}`;
-        }
-        console.log("url?", event, reqObj, reqInit);
-        reqInit = reqInit || {};
-        if (
-          reqInit.method &&
-          reqInit.method !== "HEAD" &&
-          reqInit.method !== "GET"
-        ) {
-          reqInit.body = body;
-        }
-        const fres = await fetch(reqObj, reqInit);
-        const resb = await fres.arrayBuffer();
-        const res = getResponseJSON(fres);
-        const forward = encode({ res, lan, wan }, Buffer.from(resb));
-        console.log("got forward", res);
-        const eventEmitterSend = messaging.send(event.fromMsgId, forward);
-      }
+      eventEmitter.on("route", (event) => {
+        console.log("got route event?", event);
+        this.handleEvent(messaging, event).catch((e) => {
+          console.log(e);
+        });
+      });
     });
 
     this._server.listen();
+  }
+
+  async handleEvent(messaging, event) {
+    console.log("handle event", event.data.length, event.data.byteLength);
+    // const target = event.target;
+    // const chunks = this._pending.get(target) || [];
+    // this._pending.set(target, chunks);
+    // chunks.push(event.data);
+
+    // if (!event.expectingReply) {
+    //   console.log("waiting for null chunk");
+    //   return;
+    // }
+
+    console.log("hadling request");
+    // this._pending.delete(target);
+    const lan = this._lan;
+
+    const wan = await getExternalIp();
+    console.log("lanwan", this._lan, wan);
+
+    let {
+      json: { reqObj, reqInit },
+      body,
+    } = decode(event.data);
+    if (typeof reqObj === "string" && !reqObj.startsWith("http")) {
+      reqObj = `http://daemon_caddy${reqObj}`;
+    }
+    console.log("url?", event, reqObj, reqInit);
+    reqInit = reqInit || {};
+    if (
+      reqInit.method &&
+      reqInit.method !== "HEAD" &&
+      reqInit.method !== "GET"
+    ) {
+      reqInit.body = body;
+    }
+    const fres = await fetch(reqObj, reqInit);
+    const resb = await fres.arrayBuffer();
+    const res = getResponseJSON(fres);
+    const forward = encode({ res, lan, wan }, Buffer.from(resb));
+    console.log("got forward", res, forward.length);
+    let i = 0;
+    for (; i < Math.floor(forward.length / CHUNK_SIZE); i++) {
+      messaging.send(
+        event.fromMsgId,
+        forward.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE)
+      );
+    }
+    console.log("i max", i, Math.ceil(forward.length / CHUNK_SIZE));
+    messaging.send(event.fromMsgId, forward.slice(i * CHUNK_SIZE));
+    messaging.send(event.fromMsgId, Buffer.from(""));
   }
 }

@@ -2,6 +2,14 @@ import { encode, decode } from "lob-enc";
 import { WSClient } from "pocket-sockets";
 import { Messaging, once } from "pocket-messaging";
 
+const CHUNK_SIZE = 65535;
+function uuidv4() {
+  var temp_url = URL.createObjectURL(new Blob());
+  var uuid = temp_url.toString();
+  URL.revokeObjectURL(temp_url);
+  return uuid.substr(uuid.lastIndexOf("/") + 1); // remove prefix (e.g. blob:null/, blob:www.test.com/, ...)
+}
+
 class ClientManager {
   constructor({ host, port }) {
     this._host = host;
@@ -52,9 +60,9 @@ class ClientManager {
 
   async getClientFromAddress(address, attempt = 0) {
     let client = this._clients.get(address);
-    // if (client) {
-    //   return client;
-    // }
+    if (client) {
+      return client;
+    }
 
     client = await this.createClient(address);
     this._clients.set(address, client);
@@ -84,6 +92,15 @@ class ClientManager {
   async connect(address, attempt) {
     if (this.isConnected(address)) return;
   }
+}
+
+async function normalizeBody(body) {
+  if (!body) return undefined;
+  if (typeof body === "string") return Buffer.from(body);
+  if (Buffer.isBuffer(body)) return body;
+  if (body.arrayBuffer)
+    return Buffer.from(new Uint8Array(await body.arrayBuffer()));
+  throw new Error(`don't know how to handle body`);
 }
 
 export default class PocketClient {
@@ -124,13 +141,13 @@ export default class PocketClient {
     return { reqObj, reqInit };
   }
 
-  async pocketFetch(reqObj, reqInit = {}) {
-    if (reqObj.indexOf(".wasm") > 0) {
-      return this._fetch(reqObj, reqInit);
-    }
+  async pocketFetch(reqObj, reqInit = {}, xhr = {}) {
+    // if (reqObj.indexOf(".wasm") > 0) {
+    //   return this._fetch(reqObj, reqInit);
+    // }
     // alert("alert " + reqObj);
     // this._job = this._job.then(async () => {
-    console.log("pocketFetch", reqObj, reqInit);
+    console.log("pocketFetch", xhr, reqObj, reqInit);
     const patched = this.patchFetchArgs(reqObj, reqInit);
     reqObj = patched.reqObj;
     reqInit = patched.reqInit;
@@ -138,7 +155,7 @@ export default class PocketClient {
     const body = reqObj.body || reqInit.body;
     delete reqObj.body;
     delete reqInit.body;
-    const pbody = body ? Buffer.from(body) : undefined;
+    const pbody = await normalizeBody(body);
     const packet = encode({ reqObj, reqInit }, pbody);
     // alert("get client");
     console.log("encodedPacket");
@@ -146,15 +163,29 @@ export default class PocketClient {
     const client = await this._clientManager.getClient();
     // alert(`fetching from ${client.address}`);
     console.log("pocketfetch3", client);
-    let eventEmitter = client.send("ping", packet, 10000, true);
-    console.log("pocketFetch4", eventEmitter);
+    const uuid = uuidv4().split("-")[0];
+    // let i = 0;
+    // for (; i < Math.floor(packet.length / CHUNK_SIZE); i++) {
+    //   client.send(uuid, packet.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE));
+    // }
+
+    let eventEmitter = client.send("ping", packet, xhr.timeout || 60000, true);
+    console.log("pocketFetch4", eventEmitter, eventEmitter.msgId);
 
     if (eventEmitter) {
       eventEmitter = eventEmitter.eventEmitter;
-      let reply;
-      reply = await once(eventEmitter, "reply");
+      const chunks = [];
+      let clen = 0;
+      do {
+        const chunk = await once(eventEmitter, "reply");
+        console.log("chunk", uuid, chunk);
+        chunks.push(chunk.data);
+        clen = chunk.data.length;
+      } while (clen > 0);
+      console.log("concat reply", chunks);
+      const reply = Buffer.concat(chunks);
       this._lastAddress = client.address;
-      const resp = decode(reply.data);
+      const resp = decode(reply);
       const { lan, wan } = resp.json;
       this.handleAddresses({ lan, wan });
       console.log("resp.json", resp.body, resp.json.res);
@@ -180,23 +211,18 @@ export default class PocketClient {
     const self = this;
     const _send = XMLHttpRequest.prototype.send;
     const _open = XMLHttpRequest.prototype.open;
-    // XMLHttpRequest.prototype.open = function (method, _url) {
-    //   const url = new URL(_url);
-    //   url.hostname = self._lastAddress;
-    //   url.port = 3001;
-    //   url.protocol = "http:";
-    //   _open.bind(this)(method, url.toString());
-    // };
+    XMLHttpRequest.prototype.open = function (method, url) {
+      this._method = method;
+      this._url = url;
+      return _open.bind(this)(method, url);
+    };
     XMLHttpRequest.prototype.send = async function (body) {
-      const parts = this.id.split(" ");
-      const url = parts.pop();
-      if (url.indexOf(".wasm") > 0) {
-        return _send.bind(this)(body);
-      }
-      const method = parts.pop();
+      console.log("xhr.send", this);
+      const url = this._url;
+      const method = this._method;
       const init = { method };
       if (body) init.body = body;
-      const res = await fetch(url, init).catch((e) => {
+      const res = await fetch(url, init, this).catch((e) => {
         console.log("fetch error", e);
       });
       console.log("got res", res);
