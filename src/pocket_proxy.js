@@ -63,14 +63,16 @@ export default class PocketProxy {
     console.log("handle event", event.data.length, event.data.byteLength);
     const target = event.target;
     const chunks = this._pending.get(target) || [];
-    chunks.push(event.data);
+    var copy = Buffer.alloc(event.data.length);
+    event.data.copy(copy);
+    chunks.push(copy);
     this._pending.set(target, chunks);
 
-    // if (event.data.length > 0) {
-    //   console.log("waiting for null chunk");
-    //   messaging.send(event.fromMsgId, Buffer.from(""));
-    //   return;
-    // }
+    if (!event.expectingReply) {
+      console.log("waiting for null chunk");
+      // messaging.send(event.fromMsgId, Buffer.from(""));
+      return;
+    }
 
     console.log("hadling request");
     this._pending.delete(target);
@@ -82,7 +84,7 @@ export default class PocketProxy {
     let {
       json: { reqObj, reqInit },
       body,
-    } = decode(event.data);
+    } = decode(Buffer.concat(chunks));
     if (typeof reqObj === "string" && !reqObj.startsWith("http")) {
       reqObj = `http://daemon_caddy${reqObj}`;
     }

@@ -170,29 +170,26 @@ export default class PocketClient {
     // alert(`fetching from ${client.address}`);
     console.log("pocketfetch3", client);
     const uuid = randomRoute(); //Math.random().toString(36).slice(2).slice(0, 6); // short lived id, don't need hard unique constraints
-    // let i = 0;
-    // for (; i < Math.floor(packet.length / CHUNK_SIZE); i++) {
-    //   const { eventEmitter } = client.send(
-    //     uuid,
-    //     packet.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE),
-    //     xhr.timeout || 60000,
-    //     true
-    //   );
-    //   await once(eventEmitter, "reply");
-    // }
+    let i = 0;
+    for (; i < Math.floor(packet.length / CHUNK_SIZE); i++) {
+      const { eventEmitter } = client.send(
+        uuid,
+        packet.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE)
+      );
+    }
 
     // alert(uuid);
     // alert("last chunk " + i);
-    // let eventEmitter = client.send(
-    //   uuid,
-    //   packet.slice(i * CHUNK_SIZE),
-    //   xhr.timeout || 60000,
-    //   true
-    // );
+    let eventEmitter = client.send(
+      uuid,
+      packet.slice(i * CHUNK_SIZE),
+      xhr.timeout || 60000,
+      true
+    );
     // await once(eventEmitter.eventEmitter, "reply");
     // alert("chunk reply");
     console.log("uuid?", uuid);
-    let eventEmitter = client.send(uuid, packet, xhr.timeout || 60000, true);
+    // let eventEmitter = client.send(uuid, packet, xhr.timeout || 60000, true);
     console.log("pocketFetch4", eventEmitter, eventEmitter.msgId);
 
     if (eventEmitter) {
