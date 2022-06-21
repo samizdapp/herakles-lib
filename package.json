@@ -40,7 +40,7 @@
     "node-fetch": "^2.6.7",
     "node-localstorage": "^2.2.1",
     "object-traversal": "^1.0.1",
-    "pocket-messaging": "^1.0.2",
+    "pocket-messaging": "github:samizdapp/pocket-messaging#deploy",
     "pocket-sockets": "^1.1.1",
     "public-ip": "^6.0.0",
     "rollup-plugin-node-builtins": "^2.1.2",

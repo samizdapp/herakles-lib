@@ -55,21 +55,31 @@ class ClientManager {
         client = new Messaging(_client);
 
         const { skey, dis } = await new Promise((resolve, reject) => {
-          _client.onData((buf) => {
-            return JSON.parse(buf.toString());
-          });
+          const hsfn = (buf) => {
+            console.log("got client data", buf.toString());
+            try {
+              _client.offData(hsfn);
+              resolve(JSON.parse(buf.toString()));
+            } catch (e) {
+              console.warn(e);
+            }
+          };
+          _client.onData(hsfn);
+          _client.onError(reject);
           _client.sendString("handshake");
         });
+
+        console.log("client hs start");
 
         const hs = await HandshakeAsClient(
           _client,
           this.keyPairClient.secretKey,
           this.keyPairClient.publicKey,
           Buffer.from(skey, "base64"),
-          Buffer.from(dis),
-          Buffer.from("hello")
+          Buffer.from(dis)
         );
-        alert("client hs finished");
+
+        // alert("client hs finished");
         client.setEncrypted(
           hs.clientToServerKey,
           hs.clientNonce,
@@ -101,35 +111,20 @@ class ClientManager {
     });
   }
 
-  async getClientFromAddress(address, attempt = 0) {
-    let client = this._clients.get(address);
-    if (client && !client.isClosed) {
-      return client;
+  async getClient() {
+    if (!this._gettingClient) {
+      this._gettingClient = true;
+      this._client = this._client || (await this.createClient(this._host));
+    }
+    while (!this._client) {
+      await new Promise((r) => setTimeout(r, 50));
     }
 
-    client = await this.createClient(address);
-    this._clients.set(address, client);
-    return client;
+    return this._client;
   }
 
   getAddresses() {
     return Array.from(this._addresses).concat([this._host]);
-  }
-
-  async getClient() {
-    const addresses = this.getAddresses();
-
-    this._job = this._job.then(() =>
-      Promise.race(
-        addresses.map((a) =>
-          this.getClientFromAddress(a).catch(
-            (e) => new Promise((r) => setTimeout(r, 100000))
-          )
-        )
-      )
-    );
-
-    return this._job;
   }
 
   async connect(address, attempt) {

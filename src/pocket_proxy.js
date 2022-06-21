@@ -53,16 +53,21 @@ export default class PocketProxy {
       const dis = `${Math.random()}`;
 
       console.log("init handshake", this.keyPairServer, dis);
-      client.onData(() => {
-        client.send(
-          Buffer.from(
-            JSON.stringify({
-              skey: this.keyPairServer.publicKey.toString("base64"),
-              dis,
-            })
-          )
-        );
-      });
+      const hsfn = (buf) => {
+        console.log("proxy buf", buf.toString());
+        if (buf.toString() === "handshake") {
+          client.offData(hsfn);
+          client.send(
+            Buffer.from(
+              JSON.stringify({
+                skey: this.keyPairServer.publicKey.toString("base64"),
+                dis,
+              })
+            )
+          );
+        }
+      };
+      client.onData(hsfn);
 
       console.log("sent key and dis");
       const hs = await HandshakeAsServer(
@@ -81,15 +86,15 @@ export default class PocketProxy {
 
       let messaging = new Messaging(client);
 
-      messaging.setEncrypted(
-        hs.clientToServerKey,
-        hs.clientNonce,
+      await messaging.setEncrypted(
         hs.serverToClientKey,
         hs.serverNonce,
+        hs.clientToServerKey,
+        hs.clientNonce,
         hs.peerLongtermPk
       );
 
-      messaging.open();
+      const eventEmitter = messaging.getEventEmitter();
 
       eventEmitter.on("route", (event) => {
         console.log("got route event?", event);
@@ -97,6 +102,8 @@ export default class PocketProxy {
           console.log(e);
         });
       });
+
+      messaging.open();
     });
 
     this._server.listen();
