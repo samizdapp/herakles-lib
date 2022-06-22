@@ -3,6 +3,9 @@
   "version": "0.0.0",
   "description": "shared protocol library for herakles backend <> frontend comms",
   "main": "index.js",
+  "engine": {
+    "node": "16"
+  },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },

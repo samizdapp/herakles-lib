@@ -3,8 +3,9 @@
 Object.defineProperty(exports, '__esModule', { value: true });
 
 var AsyncStorage = require('@react-native-async-storage/async-storage');
-var events = require('events');
 var crypto__default = require('crypto');
+var require$$2 = require('stream');
+var events = require('events');
 var process$1 = require('process');
 
 function _interopDefaultLegacy (e) { return e && typeof e === 'object' && 'default' in e ? e : { 'default': e }; }
@@ -30,6 +31,7 @@ function _interopNamespace(e) {
 var AsyncStorage__default = /*#__PURE__*/_interopDefaultLegacy(AsyncStorage);
 var crypto__default__default = /*#__PURE__*/_interopDefaultLegacy(crypto__default);
 var crypto__default__namespace = /*#__PURE__*/_interopNamespace(crypto__default);
+var require$$2__default = /*#__PURE__*/_interopDefaultLegacy(require$$2);
 var process__namespace = /*#__PURE__*/_interopNamespace(process$1);
 
 var global$2 = (typeof global$1 !== "undefined" ? global$1 :
@@ -2089,61 +2091,366 @@ class ExpoStorage extends Storage {
 
 var commonjsGlobal = typeof globalThis !== 'undefined' ? globalThis : typeof window !== 'undefined' ? window : typeof global !== 'undefined' ? global : typeof self !== 'undefined' ? self : {};
 
-// encode a packet
-var encode = function(head, body)
-{
-  // support different arg types
-  if(head === null) head = false; // grrrr
-  if(typeof head == 'number') head = new Buffer(String.fromCharCode(json));
-  if(typeof head == 'object')
+var lobEnc = {};
+
+var chacha20 = {};
+
+// Written in 2014 by Devi Mandiri. Public domain.
+//
+// Implementation derived from chacha-ref.c version 20080118
+// See for details: http://cr.yp.to/chacha/chacha-20080128.pdf
+
+function U8TO32_LE(x, i) {
+  return x[i] | (x[i+1]<<8) | (x[i+2]<<16) | (x[i+3]<<24);
+}
+
+function U32TO8_LE(x, i, u) {
+  x[i]   = u; u >>>= 8;
+  x[i+1] = u; u >>>= 8;
+  x[i+2] = u; u >>>= 8;
+  x[i+3] = u;
+}
+
+function ROTATE(v, c) {
+  return (v << c) | (v >>> (32 - c));
+}
+
+var Chacha20 = function(key, nonce, counter) {
+  this.input = new Uint32Array(16);
+
+  // https://tools.ietf.org/html/draft-irtf-cfrg-chacha20-poly1305-01#section-2.3
+  this.input[0] = 1634760805;
+  this.input[1] =  857760878;
+  this.input[2] = 2036477234;
+  this.input[3] = 1797285236;
+  this.input[4] = U8TO32_LE(key, 0);
+  this.input[5] = U8TO32_LE(key, 4);
+  this.input[6] = U8TO32_LE(key, 8);
+  this.input[7] = U8TO32_LE(key, 12);
+  this.input[8] = U8TO32_LE(key, 16);
+  this.input[9] = U8TO32_LE(key, 20);
+  this.input[10] = U8TO32_LE(key, 24);
+  this.input[11] = U8TO32_LE(key, 28);
+  // be compatible with the reference ChaCha depending on the nonce size
+  if(nonce.length == 12)
   {
-    // accept a packet as the first arg
-    if(isBuffer(head.body) && body === undefined)
-    {
-      body = head.body;
-      head = head.head || head.json;
-    }
-    // serialize raw json
-    if(!isBuffer(head))
-    {
-      head = new Buffer(JSON.stringify(head));
-      // require real json object
-      if(head.length < 7) head = false;
-    }
+    this.input[12] = counter;
+    this.input[13] = U8TO32_LE(nonce, 0);
+    this.input[14] = U8TO32_LE(nonce, 4);
+    this.input[15] = U8TO32_LE(nonce, 8);
+  }else {
+    this.input[12] = counter;
+    this.input[13] = 0;
+    this.input[14] = U8TO32_LE(nonce, 0);
+    this.input[15] = U8TO32_LE(nonce, 4);
+    
   }
-  head = head || new Buffer(0);
-  if(typeof body == 'string') body = new Buffer(body, 'binary');
-  body = body || new Buffer(0);
-  var len = new Buffer(2);
-  len.writeInt16BE(head.length, 0);
-  return Buffer.concat([len, head, body]);
 };
 
-// packet decoding, add values to a buffer return
-var decode$1 = function(bin)
-{
-  if(!bin) return undefined;
-  var buf = (typeof bin == 'string') ? new Buffer(bin, 'binary') : bin;
-  if(bin.length < 2) return undefined;
-
-  // read and validate the json length
-  var len = buf.readUInt16BE(0);
-  if(len > (buf.length - 2)) return undefined;
-  buf.head = buf.slice(2, len+2);
-  buf.body = buf.slice(len + 2);
-
-  // parse out the json
-  buf.json = {};
-  if(len >= 7)
-  {
-    try {
-      buf.json = JSON.parse(buf.head.toString('utf8'));
-    } catch(E) {
-      return undefined;
-    }
-  }
-  return buf;
+Chacha20.prototype.quarterRound = function(x, a, b, c, d) {
+  x[a] += x[b]; x[d] = ROTATE(x[d] ^ x[a], 16);
+  x[c] += x[d]; x[b] = ROTATE(x[b] ^ x[c], 12);
+  x[a] += x[b]; x[d] = ROTATE(x[d] ^ x[a],  8);
+  x[c] += x[d]; x[b] = ROTATE(x[b] ^ x[c],  7);
 };
+
+Chacha20.prototype.encrypt = function(dst, src, len) {
+  var x = new Uint32Array(16);
+  var output = new Uint8Array(64);
+  var i, dpos = 0, spos = 0;
+
+  while (len > 0 ) {
+    for (i = 16; i--;) x[i] = this.input[i];
+    for (i = 20; i > 0; i -= 2) {
+      this.quarterRound(x, 0, 4, 8,12);
+      this.quarterRound(x, 1, 5, 9,13);
+      this.quarterRound(x, 2, 6,10,14);
+      this.quarterRound(x, 3, 7,11,15);
+      this.quarterRound(x, 0, 5,10,15);
+      this.quarterRound(x, 1, 6,11,12);
+      this.quarterRound(x, 2, 7, 8,13);
+      this.quarterRound(x, 3, 4, 9,14);
+    }
+    for (i = 16; i--;) x[i] += this.input[i];
+    for (i = 16; i--;) U32TO8_LE(output, 4*i, x[i]);
+
+    this.input[12] += 1;
+    if (!this.input[12]) {
+      this.input[13] += 1;
+    }
+    if (len <= 64) {
+      for (i = len; i--;) {
+        dst[i+dpos] = src[i+spos] ^ output[i];
+      }
+      return;
+    }
+    for (i = 64; i--;) {
+      dst[i+dpos] = src[i+spos] ^ output[i];
+    }
+    len -= 64;
+    spos += 64;
+    dpos += 64;
+  }
+};
+
+Chacha20.prototype.keystream = function(dst, len) {
+  for (var i = 0; i < len; ++i) dst[i] = 0;
+  this.encrypt(dst, dst, len);
+};
+
+// additions to make it easier and export it as a module
+
+chacha20.Cipher = Chacha20;
+
+chacha20.encrypt = chacha20.decrypt = function(key, nonce, data)
+{
+  var cipher = new Chacha20(key, nonce);
+  var ret = new Buffer(data.length);
+  cipher.encrypt(ret, data, data.length);
+  return ret;
+};
+
+(function (exports) {
+	var crypto = crypto__default__default["default"];
+	var chacha20$1 = chacha20;
+
+	// encode a packet
+	exports.encode = function(head, body)
+	{
+	  // support different arg types
+	  if(head === null) head = false; // grrrr
+	  if(typeof head == 'number') head = new Buffer(String.fromCharCode(json));
+	  if(typeof head == 'object')
+	  {
+	    // accept a packet as the first arg
+	    if(isBuffer(head.body) && body === undefined)
+	    {
+	      body = head.body;
+	      head = head.head || head.json;
+	    }
+	    // serialize raw json
+	    if(!isBuffer(head))
+	    {
+	      head = new Buffer(JSON.stringify(head));
+	      // require real json object
+	      if(head.length < 7) head = false;
+	    }
+	  }
+	  head = head || new Buffer(0);
+	  if(typeof body == 'string') body = new Buffer(body, 'binary');
+	  body = body || new Buffer(0);
+	  var len = new Buffer(2);
+	  len.writeInt16BE(head.length, 0);
+	  return Buffer.concat([len, head, body]);
+	};
+
+	// packet decoding, add values to a buffer return
+	exports.decode =function(bin)
+	{
+	  if(!bin) return undefined;
+	  var buf = (typeof bin == 'string') ? new Buffer(bin, 'binary') : bin;
+	  if(bin.length < 2) return undefined;
+
+	  // read and validate the json length
+	  var len = buf.readUInt16BE(0);
+	  if(len > (buf.length - 2)) return undefined;
+	  buf.head = buf.slice(2, len+2);
+	  buf.body = buf.slice(len + 2);
+
+	  // parse out the json
+	  buf.json = {};
+	  if(len >= 7)
+	  {
+	    try {
+	      buf.json = JSON.parse(buf.head.toString('utf8'));
+	    } catch(E) {
+	      return undefined;
+	    }
+	  }
+	  return buf;
+	};
+
+	// convenience to create a valid packet object
+	exports.packet = function(head, body)
+	{
+	  return exports.decode(exports.encode(head, body));
+	};
+
+	exports.isPacket = function(packet)
+	{
+	  if(!isBuffer(packet)) return false;
+	  if(packet.length < 2) return false;
+	  if(typeof packet.json != 'object') return false;
+	  if(!isBuffer(packet.head)) return false;
+	  if(!isBuffer(packet.body)) return false;
+	  return true;
+	};
+
+	// read a bytestream for a packet, decode the header and pass body through
+	var Transform = require$$2__default["default"].Transform;
+	exports.stream = function(cbHead){
+	  var stream = new Transform();
+	  var buf = new Buffer(0);
+	  stream._transform = function(data,enc,cbTransform)
+	  {
+	    // no buffer means pass everything through
+	    if(!buf)
+	    {
+	      stream.push(data);
+	      return cbTransform();
+	    }
+	    // gather until full header
+	    buf = Buffer.concat([buf,data]);
+	    var packet = exports.decode(buf);
+	    if(!packet) return cbTransform();
+	    buf = false; // pass through all future data
+	    // give to the app
+	    cbHead(packet, function(err){
+	      if(err) return cbTransform(err);
+	      stream.push(packet.body);
+	      cbTransform();
+	    });
+	  };
+	  return stream;
+	};
+
+	// chunking stream
+	var Duplex = require$$2__default["default"].Duplex;
+	exports.chunking = function(args, cbPacket){
+	  if(!args) args = {};
+	  if(!cbPacket) cbPacket = function(err, packet){ };
+
+	  // chunks can have space for 1 to 255 bytes
+	  if(!args.size || args.size > 256) args.size = 256;
+	  var space = args.size - 1;
+	  if(space < 1) space = 1; // minimum
+	  
+	  var blocked = false;
+	  if(args.blocking) args.ack = true; // blocking requires acks
+
+	  var stream = new Duplex({allowHalfOpen:false});
+	  var queue = [];
+	  
+	  // incoming chunked data coming from another stream
+	  var chunks = new Buffer(0);
+	  var data = new Buffer(0);
+	  stream._write = function(data2,enc,cbWrite)
+	  {
+	    // trigger an error when http is detected, but otherwise continue
+	    if(data.length == 0 && data2.slice(0,5).toString() == 'GET /')
+	    {
+	      cbPacket("HTTP detected",data2);
+	    }
+	    data = Buffer.concat([data,data2]);
+	    while(data.length)
+	    {
+	      var len = data.readUInt8(0);
+	      // packet done or ack
+	      if(len === 0)
+	      {
+	        blocked = false;
+	        if(chunks.length)
+	        {
+	          var packet = exports.decode(chunks);
+	          chunks = new Buffer(0);
+	          if(packet) cbPacket(false, packet);
+	        }
+	        data = data.slice(1);
+	        continue;
+	      }
+	      // not a full chunk yet, wait for more
+	      if(data.length < (len+1)) break;
+
+	      // full chunk, buffer it up
+	      blocked = false;
+	      chunks = Buffer.concat([chunks,data.slice(1,len+1)]);
+	      data = data.slice(len+1);
+	      // ensure a response when enabled
+	      if(args.ack)
+	      {
+	        if(!queue.length) queue.push(new Buffer("\0"));
+	      }
+	    }
+	    stream.send(); // always try sending more data
+	    cbWrite();
+	  };
+
+	  // accept packets to be chunked
+	  stream.send = function(packet)
+	  {
+	    // break packet into chunks and add to queue
+	    while(packet)
+	    {
+	      var len = new Buffer(1);
+	      var chunk = packet.slice(0,space);
+	      packet = packet.slice(chunk.length);
+	      len.writeUInt8(chunk.length,0);
+	      // check if we can include the packet terminating zero
+	      var zero = new Buffer(0);
+	      if(packet.length == 0 && chunk.length <= space)
+	      {
+	        zero = new Buffer("\0");
+	        packet = false;
+	      }
+	      queue.push(Buffer.concat([len,chunk,zero]));
+	    }
+
+	    // pull next chunk off the queue
+	    if(queue.length && !blocked)
+	    {
+	      var chunk = queue.shift();
+	      if(args.blocking && chunk.length > 1) blocked = true;
+	      if(stream.push(chunk)) stream.send(); // let the loop figure itself out
+	    }
+	  };
+
+	  // try sending more chunks
+	  stream._read = function(size)
+	  {
+	    stream.send();
+	  };
+
+	  return stream;
+	};
+
+	function keyize(key)
+	{
+	  if(!key) key = "telehash";
+	  if(isBuffer(key) && key.length == 32) return key;
+	  return crypto.createHash('sha256').update(key).digest();
+	}
+
+	exports.cloak = function(packet, key, rounds)
+	{
+	  if(!(key = keyize(key)) || !isBuffer(packet)) return undefined;
+	  if(!rounds) rounds = 1;
+	  // get a non-zero start
+	  while(1)
+	  {
+	    var nonce = crypto.randomBytes(8);
+	    if(nonce[0] == 0) continue;
+	    break;
+	  }
+	  var cloaked = Buffer.concat([nonce, chacha20$1.encrypt(key, nonce, packet)]);
+	  rounds--;
+	  return (rounds) ? exports.cloak(cloaked, key, rounds) : cloaked;
+	};
+
+	exports.decloak = function(cloaked, key, rounds)
+	{
+	  if(!(key = keyize(key)) || !isBuffer(cloaked) || cloaked.length < 2) return undefined;
+	  if(!rounds) rounds = 0;
+	  if(cloaked[0] == 0)
+	  {
+	    var packet = exports.decode(cloaked);
+	    if(packet) packet.cloaked = rounds;
+	    return packet;
+	  }
+	  if(cloaked.length < 10) return undefined; // must have cloak and a minimum packet
+	  rounds++;
+	  return exports.decloak(chacha20$1.decrypt(key, cloaked.slice(0,8), cloaked.slice(8)), key, rounds);
+	};
+} (lobEnc));
 
 // shim for using process in browser
 // based off https://github.com/defunctzombie/node-process/blob/master/browser.js
@@ -2771,7 +3078,7 @@ var indexMinimal = {};
 
 var minimal = {};
 
-var aspromise = asPromise$1;
+var aspromise = asPromise;
 
 /**
  * Callback as used by {@link util.asPromise}.
@@ -2790,7 +3097,7 @@ var aspromise = asPromise$1;
  * @param {...*} params Function arguments
  * @returns {Promise<*>} Promisified function
  */
-function asPromise$1(fn, ctx/*, varargs */) {
+function asPromise(fn, ctx/*, varargs */) {
     var params  = new Array(arguments.length - 1),
         offset  = 0,
         index   = 2,
@@ -3376,7 +3683,7 @@ function readUintBE(buf, pos) {
           | buf[pos + 3]) >>> 0;
 }
 
-var inquire_1 = inquire$1;
+var inquire_1 = inquire;
 
 /**
  * Requires a module only if available.
@@ -3384,7 +3691,7 @@ var inquire_1 = inquire$1;
  * @param {string} moduleName Module to require
  * @returns {?Object} Required module if available and not empty, otherwise `null`
  */
-function inquire$1(moduleName) {
+function inquire(moduleName) {
     try {
         var mod = eval("quire".replace(/^/,"re"))(moduleName); // eslint-disable-line no-eval
         if (mod && (mod.length || Object.keys(mod).length))
@@ -5424,288 +5731,311 @@ var roots = {};
 
 var util$2 = {exports: {}};
 
-var codegen_1 = codegen;
+var codegen_1;
+var hasRequiredCodegen;
 
-/**
- * Begins generating a function.
- * @memberof util
- * @param {string[]} functionParams Function parameter names
- * @param {string} [functionName] Function name if not anonymous
- * @returns {Codegen} Appender that appends code to the function's body
- */
-function codegen(functionParams, functionName) {
+function requireCodegen () {
+	if (hasRequiredCodegen) return codegen_1;
+	hasRequiredCodegen = 1;
+	codegen_1 = codegen;
 
-    /* istanbul ignore if */
-    if (typeof functionParams === "string") {
-        functionName = functionParams;
-        functionParams = undefined;
-    }
+	/**
+	 * Begins generating a function.
+	 * @memberof util
+	 * @param {string[]} functionParams Function parameter names
+	 * @param {string} [functionName] Function name if not anonymous
+	 * @returns {Codegen} Appender that appends code to the function's body
+	 */
+	function codegen(functionParams, functionName) {
 
-    var body = [];
+	    /* istanbul ignore if */
+	    if (typeof functionParams === "string") {
+	        functionName = functionParams;
+	        functionParams = undefined;
+	    }
 
-    /**
-     * Appends code to the function's body or finishes generation.
-     * @typedef Codegen
-     * @type {function}
-     * @param {string|Object.<string,*>} [formatStringOrScope] Format string or, to finish the function, an object of additional scope variables, if any
-     * @param {...*} [formatParams] Format parameters
-     * @returns {Codegen|Function} Itself or the generated function if finished
-     * @throws {Error} If format parameter counts do not match
-     */
+	    var body = [];
 
-    function Codegen(formatStringOrScope) {
-        // note that explicit array handling below makes this ~50% faster
+	    /**
+	     * Appends code to the function's body or finishes generation.
+	     * @typedef Codegen
+	     * @type {function}
+	     * @param {string|Object.<string,*>} [formatStringOrScope] Format string or, to finish the function, an object of additional scope variables, if any
+	     * @param {...*} [formatParams] Format parameters
+	     * @returns {Codegen|Function} Itself or the generated function if finished
+	     * @throws {Error} If format parameter counts do not match
+	     */
 
-        // finish the function
-        if (typeof formatStringOrScope !== "string") {
-            var source = toString();
-            if (codegen.verbose)
-                console.log("codegen: " + source); // eslint-disable-line no-console
-            source = "return " + source;
-            if (formatStringOrScope) {
-                var scopeKeys   = Object.keys(formatStringOrScope),
-                    scopeParams = new Array(scopeKeys.length + 1),
-                    scopeValues = new Array(scopeKeys.length),
-                    scopeOffset = 0;
-                while (scopeOffset < scopeKeys.length) {
-                    scopeParams[scopeOffset] = scopeKeys[scopeOffset];
-                    scopeValues[scopeOffset] = formatStringOrScope[scopeKeys[scopeOffset++]];
-                }
-                scopeParams[scopeOffset] = source;
-                return Function.apply(null, scopeParams).apply(null, scopeValues); // eslint-disable-line no-new-func
-            }
-            return Function(source)(); // eslint-disable-line no-new-func
-        }
+	    function Codegen(formatStringOrScope) {
+	        // note that explicit array handling below makes this ~50% faster
 
-        // otherwise append to body
-        var formatParams = new Array(arguments.length - 1),
-            formatOffset = 0;
-        while (formatOffset < formatParams.length)
-            formatParams[formatOffset] = arguments[++formatOffset];
-        formatOffset = 0;
-        formatStringOrScope = formatStringOrScope.replace(/%([%dfijs])/g, function replace($0, $1) {
-            var value = formatParams[formatOffset++];
-            switch ($1) {
-                case "d": case "f": return String(Number(value));
-                case "i": return String(Math.floor(value));
-                case "j": return JSON.stringify(value);
-                case "s": return String(value);
-            }
-            return "%";
-        });
-        if (formatOffset !== formatParams.length)
-            throw Error("parameter count mismatch");
-        body.push(formatStringOrScope);
-        return Codegen;
-    }
+	        // finish the function
+	        if (typeof formatStringOrScope !== "string") {
+	            var source = toString();
+	            if (codegen.verbose)
+	                console.log("codegen: " + source); // eslint-disable-line no-console
+	            source = "return " + source;
+	            if (formatStringOrScope) {
+	                var scopeKeys   = Object.keys(formatStringOrScope),
+	                    scopeParams = new Array(scopeKeys.length + 1),
+	                    scopeValues = new Array(scopeKeys.length),
+	                    scopeOffset = 0;
+	                while (scopeOffset < scopeKeys.length) {
+	                    scopeParams[scopeOffset] = scopeKeys[scopeOffset];
+	                    scopeValues[scopeOffset] = formatStringOrScope[scopeKeys[scopeOffset++]];
+	                }
+	                scopeParams[scopeOffset] = source;
+	                return Function.apply(null, scopeParams).apply(null, scopeValues); // eslint-disable-line no-new-func
+	            }
+	            return Function(source)(); // eslint-disable-line no-new-func
+	        }
 
-    function toString(functionNameOverride) {
-        return "function " + (functionNameOverride || functionName || "") + "(" + (functionParams && functionParams.join(",") || "") + "){\n  " + body.join("\n  ") + "\n}";
-    }
+	        // otherwise append to body
+	        var formatParams = new Array(arguments.length - 1),
+	            formatOffset = 0;
+	        while (formatOffset < formatParams.length)
+	            formatParams[formatOffset] = arguments[++formatOffset];
+	        formatOffset = 0;
+	        formatStringOrScope = formatStringOrScope.replace(/%([%dfijs])/g, function replace($0, $1) {
+	            var value = formatParams[formatOffset++];
+	            switch ($1) {
+	                case "d": case "f": return String(Number(value));
+	                case "i": return String(Math.floor(value));
+	                case "j": return JSON.stringify(value);
+	                case "s": return String(value);
+	            }
+	            return "%";
+	        });
+	        if (formatOffset !== formatParams.length)
+	            throw Error("parameter count mismatch");
+	        body.push(formatStringOrScope);
+	        return Codegen;
+	    }
 
-    Codegen.toString = toString;
-    return Codegen;
+	    function toString(functionNameOverride) {
+	        return "function " + (functionNameOverride || functionName || "") + "(" + (functionParams && functionParams.join(",") || "") + "){\n  " + body.join("\n  ") + "\n}";
+	    }
+
+	    Codegen.toString = toString;
+	    return Codegen;
+	}
+
+	/**
+	 * Begins generating a function.
+	 * @memberof util
+	 * @function codegen
+	 * @param {string} [functionName] Function name if not anonymous
+	 * @returns {Codegen} Appender that appends code to the function's body
+	 * @variation 2
+	 */
+
+	/**
+	 * When set to `true`, codegen will log generated code to console. Useful for debugging.
+	 * @name util.codegen.verbose
+	 * @type {boolean}
+	 */
+	codegen.verbose = false;
+	return codegen_1;
 }
 
-/**
- * Begins generating a function.
- * @memberof util
- * @function codegen
- * @param {string} [functionName] Function name if not anonymous
- * @returns {Codegen} Appender that appends code to the function's body
- * @variation 2
- */
+var fetch_1;
+var hasRequiredFetch;
 
-/**
- * When set to `true`, codegen will log generated code to console. Useful for debugging.
- * @name util.codegen.verbose
- * @type {boolean}
- */
-codegen.verbose = false;
+function requireFetch () {
+	if (hasRequiredFetch) return fetch_1;
+	hasRequiredFetch = 1;
+	fetch_1 = fetch;
 
-var fetch_1 = fetch$1;
+	var asPromise = aspromise,
+	    inquire   = inquire_1;
 
-var asPromise = aspromise,
-    inquire   = inquire_1;
+	var fs = inquire("fs");
 
-var fs = inquire("fs");
+	/**
+	 * Node-style callback as used by {@link util.fetch}.
+	 * @typedef FetchCallback
+	 * @type {function}
+	 * @param {?Error} error Error, if any, otherwise `null`
+	 * @param {string} [contents] File contents, if there hasn't been an error
+	 * @returns {undefined}
+	 */
 
-/**
- * Node-style callback as used by {@link util.fetch}.
- * @typedef FetchCallback
- * @type {function}
- * @param {?Error} error Error, if any, otherwise `null`
- * @param {string} [contents] File contents, if there hasn't been an error
- * @returns {undefined}
- */
+	/**
+	 * Options as used by {@link util.fetch}.
+	 * @typedef FetchOptions
+	 * @type {Object}
+	 * @property {boolean} [binary=false] Whether expecting a binary response
+	 * @property {boolean} [xhr=false] If `true`, forces the use of XMLHttpRequest
+	 */
 
-/**
- * Options as used by {@link util.fetch}.
- * @typedef FetchOptions
- * @type {Object}
- * @property {boolean} [binary=false] Whether expecting a binary response
- * @property {boolean} [xhr=false] If `true`, forces the use of XMLHttpRequest
- */
+	/**
+	 * Fetches the contents of a file.
+	 * @memberof util
+	 * @param {string} filename File path or url
+	 * @param {FetchOptions} options Fetch options
+	 * @param {FetchCallback} callback Callback function
+	 * @returns {undefined}
+	 */
+	function fetch(filename, options, callback) {
+	    if (typeof options === "function") {
+	        callback = options;
+	        options = {};
+	    } else if (!options)
+	        options = {};
 
-/**
- * Fetches the contents of a file.
- * @memberof util
- * @param {string} filename File path or url
- * @param {FetchOptions} options Fetch options
- * @param {FetchCallback} callback Callback function
- * @returns {undefined}
- */
-function fetch$1(filename, options, callback) {
-    if (typeof options === "function") {
-        callback = options;
-        options = {};
-    } else if (!options)
-        options = {};
+	    if (!callback)
+	        return asPromise(fetch, this, filename, options); // eslint-disable-line no-invalid-this
 
-    if (!callback)
-        return asPromise(fetch$1, this, filename, options); // eslint-disable-line no-invalid-this
+	    // if a node-like filesystem is present, try it first but fall back to XHR if nothing is found.
+	    if (!options.xhr && fs && fs.readFile)
+	        return fs.readFile(filename, function fetchReadFileCallback(err, contents) {
+	            return err && typeof XMLHttpRequest !== "undefined"
+	                ? fetch.xhr(filename, options, callback)
+	                : err
+	                ? callback(err)
+	                : callback(null, options.binary ? contents : contents.toString("utf8"));
+	        });
 
-    // if a node-like filesystem is present, try it first but fall back to XHR if nothing is found.
-    if (!options.xhr && fs && fs.readFile)
-        return fs.readFile(filename, function fetchReadFileCallback(err, contents) {
-            return err && typeof XMLHttpRequest !== "undefined"
-                ? fetch$1.xhr(filename, options, callback)
-                : err
-                ? callback(err)
-                : callback(null, options.binary ? contents : contents.toString("utf8"));
-        });
+	    // use the XHR version otherwise.
+	    return fetch.xhr(filename, options, callback);
+	}
 
-    // use the XHR version otherwise.
-    return fetch$1.xhr(filename, options, callback);
+	/**
+	 * Fetches the contents of a file.
+	 * @name util.fetch
+	 * @function
+	 * @param {string} path File path or url
+	 * @param {FetchCallback} callback Callback function
+	 * @returns {undefined}
+	 * @variation 2
+	 */
+
+	/**
+	 * Fetches the contents of a file.
+	 * @name util.fetch
+	 * @function
+	 * @param {string} path File path or url
+	 * @param {FetchOptions} [options] Fetch options
+	 * @returns {Promise<string|Uint8Array>} Promise
+	 * @variation 3
+	 */
+
+	/**/
+	fetch.xhr = function fetch_xhr(filename, options, callback) {
+	    var xhr = new XMLHttpRequest();
+	    xhr.onreadystatechange /* works everywhere */ = function fetchOnReadyStateChange() {
+
+	        if (xhr.readyState !== 4)
+	            return undefined;
+
+	        // local cors security errors return status 0 / empty string, too. afaik this cannot be
+	        // reliably distinguished from an actually empty file for security reasons. feel free
+	        // to send a pull request if you are aware of a solution.
+	        if (xhr.status !== 0 && xhr.status !== 200)
+	            return callback(Error("status " + xhr.status));
+
+	        // if binary data is expected, make sure that some sort of array is returned, even if
+	        // ArrayBuffers are not supported. the binary string fallback, however, is unsafe.
+	        if (options.binary) {
+	            var buffer = xhr.response;
+	            if (!buffer) {
+	                buffer = [];
+	                for (var i = 0; i < xhr.responseText.length; ++i)
+	                    buffer.push(xhr.responseText.charCodeAt(i) & 255);
+	            }
+	            return callback(null, typeof Uint8Array !== "undefined" ? new Uint8Array(buffer) : buffer);
+	        }
+	        return callback(null, xhr.responseText);
+	    };
+
+	    if (options.binary) {
+	        // ref: https://developer.mozilla.org/en-US/docs/Web/API/XMLHttpRequest/Sending_and_Receiving_Binary_Data#Receiving_binary_data_in_older_browsers
+	        if ("overrideMimeType" in xhr)
+	            xhr.overrideMimeType("text/plain; charset=x-user-defined");
+	        xhr.responseType = "arraybuffer";
+	    }
+
+	    xhr.open("GET", filename);
+	    xhr.send();
+	};
+	return fetch_1;
 }
-
-/**
- * Fetches the contents of a file.
- * @name util.fetch
- * @function
- * @param {string} path File path or url
- * @param {FetchCallback} callback Callback function
- * @returns {undefined}
- * @variation 2
- */
-
-/**
- * Fetches the contents of a file.
- * @name util.fetch
- * @function
- * @param {string} path File path or url
- * @param {FetchOptions} [options] Fetch options
- * @returns {Promise<string|Uint8Array>} Promise
- * @variation 3
- */
-
-/**/
-fetch$1.xhr = function fetch_xhr(filename, options, callback) {
-    var xhr = new XMLHttpRequest();
-    xhr.onreadystatechange /* works everywhere */ = function fetchOnReadyStateChange() {
-
-        if (xhr.readyState !== 4)
-            return undefined;
-
-        // local cors security errors return status 0 / empty string, too. afaik this cannot be
-        // reliably distinguished from an actually empty file for security reasons. feel free
-        // to send a pull request if you are aware of a solution.
-        if (xhr.status !== 0 && xhr.status !== 200)
-            return callback(Error("status " + xhr.status));
-
-        // if binary data is expected, make sure that some sort of array is returned, even if
-        // ArrayBuffers are not supported. the binary string fallback, however, is unsafe.
-        if (options.binary) {
-            var buffer = xhr.response;
-            if (!buffer) {
-                buffer = [];
-                for (var i = 0; i < xhr.responseText.length; ++i)
-                    buffer.push(xhr.responseText.charCodeAt(i) & 255);
-            }
-            return callback(null, typeof Uint8Array !== "undefined" ? new Uint8Array(buffer) : buffer);
-        }
-        return callback(null, xhr.responseText);
-    };
-
-    if (options.binary) {
-        // ref: https://developer.mozilla.org/en-US/docs/Web/API/XMLHttpRequest/Sending_and_Receiving_Binary_Data#Receiving_binary_data_in_older_browsers
-        if ("overrideMimeType" in xhr)
-            xhr.overrideMimeType("text/plain; charset=x-user-defined");
-        xhr.responseType = "arraybuffer";
-    }
-
-    xhr.open("GET", filename);
-    xhr.send();
-};
 
 var path = {};
 
-(function (exports) {
+var hasRequiredPath;
 
-	/**
-	 * A minimal path module to resolve Unix, Windows and URL paths alike.
-	 * @memberof util
-	 * @namespace
-	 */
-	var path = exports;
+function requirePath () {
+	if (hasRequiredPath) return path;
+	hasRequiredPath = 1;
+	(function (exports) {
 
-	var isAbsolute =
-	/**
-	 * Tests if the specified path is absolute.
-	 * @param {string} path Path to test
-	 * @returns {boolean} `true` if path is absolute
-	 */
-	path.isAbsolute = function isAbsolute(path) {
-	    return /^(?:\/|\w+:)/.test(path);
-	};
+		/**
+		 * A minimal path module to resolve Unix, Windows and URL paths alike.
+		 * @memberof util
+		 * @namespace
+		 */
+		var path = exports;
 
-	var normalize =
-	/**
-	 * Normalizes the specified path.
-	 * @param {string} path Path to normalize
-	 * @returns {string} Normalized path
-	 */
-	path.normalize = function normalize(path) {
-	    path = path.replace(/\\/g, "/")
-	               .replace(/\/{2,}/g, "/");
-	    var parts    = path.split("/"),
-	        absolute = isAbsolute(path),
-	        prefix   = "";
-	    if (absolute)
-	        prefix = parts.shift() + "/";
-	    for (var i = 0; i < parts.length;) {
-	        if (parts[i] === "..") {
-	            if (i > 0 && parts[i - 1] !== "..")
-	                parts.splice(--i, 2);
-	            else if (absolute)
-	                parts.splice(i, 1);
-	            else
-	                ++i;
-	        } else if (parts[i] === ".")
-	            parts.splice(i, 1);
-	        else
-	            ++i;
-	    }
-	    return prefix + parts.join("/");
-	};
+		var isAbsolute =
+		/**
+		 * Tests if the specified path is absolute.
+		 * @param {string} path Path to test
+		 * @returns {boolean} `true` if path is absolute
+		 */
+		path.isAbsolute = function isAbsolute(path) {
+		    return /^(?:\/|\w+:)/.test(path);
+		};
 
-	/**
-	 * Resolves the specified include path against the specified origin path.
-	 * @param {string} originPath Path to the origin file
-	 * @param {string} includePath Include path relative to origin path
-	 * @param {boolean} [alreadyNormalized=false] `true` if both paths are already known to be normalized
-	 * @returns {string} Path to the include file
-	 */
-	path.resolve = function resolve(originPath, includePath, alreadyNormalized) {
-	    if (!alreadyNormalized)
-	        includePath = normalize(includePath);
-	    if (isAbsolute(includePath))
-	        return includePath;
-	    if (!alreadyNormalized)
-	        originPath = normalize(originPath);
-	    return (originPath = originPath.replace(/(?:\/|^)[^/]+$/, "")).length ? normalize(originPath + "/" + includePath) : includePath;
-	};
+		var normalize =
+		/**
+		 * Normalizes the specified path.
+		 * @param {string} path Path to normalize
+		 * @returns {string} Normalized path
+		 */
+		path.normalize = function normalize(path) {
+		    path = path.replace(/\\/g, "/")
+		               .replace(/\/{2,}/g, "/");
+		    var parts    = path.split("/"),
+		        absolute = isAbsolute(path),
+		        prefix   = "";
+		    if (absolute)
+		        prefix = parts.shift() + "/";
+		    for (var i = 0; i < parts.length;) {
+		        if (parts[i] === "..") {
+		            if (i > 0 && parts[i - 1] !== "..")
+		                parts.splice(--i, 2);
+		            else if (absolute)
+		                parts.splice(i, 1);
+		            else
+		                ++i;
+		        } else if (parts[i] === ".")
+		            parts.splice(i, 1);
+		        else
+		            ++i;
+		    }
+		    return prefix + parts.join("/");
+		};
+
+		/**
+		 * Resolves the specified include path against the specified origin path.
+		 * @param {string} originPath Path to the origin file
+		 * @param {string} includePath Include path relative to origin path
+		 * @param {boolean} [alreadyNormalized=false] `true` if both paths are already known to be normalized
+		 * @returns {string} Path to the include file
+		 */
+		path.resolve = function resolve(originPath, includePath, alreadyNormalized) {
+		    if (!alreadyNormalized)
+		        includePath = normalize(includePath);
+		    if (isAbsolute(includePath))
+		        return includePath;
+		    if (!alreadyNormalized)
+		        originPath = normalize(originPath);
+		    return (originPath = originPath.replace(/(?:\/|^)[^/]+$/, "")).length ? normalize(originPath + "/" + includePath) : includePath;
+		};
 } (path));
+	return path;
+}
 
 var types$1 = {};
 
@@ -9280,9 +9610,9 @@ function requireUtil () {
 		var Type, // cyclic
 		    Enum;
 
-		util.codegen = codegen_1;
-		util.fetch   = fetch_1;
-		util.path    = path;
+		util.codegen = requireCodegen();
+		util.fetch   = requireFetch();
+		util.path    = requirePath();
 
 		/**
 		 * Node's fs module if available.
@@ -13634,7 +13964,7 @@ class RatchetClient {
   }
 
   async _encryptRequest(options) {
-    const packet = encode(options);
+    const packet = lobEnc.encode(options);
     const serverID = await this.getServerID();
     const buffer = await this._racket.encrypt(serverID, packet);
     return buffer;
@@ -13654,14 +13984,14 @@ class RatchetClient {
 
   async encryptFetch(reqObj, reqInit = {}) {
     const serverID = await this.getServerID();
-    const packet = encode({ reqObj, reqInit }, reqObj.body || reqInit.body);
+    const packet = lobEnc.encode({ reqObj, reqInit }, reqObj.body || reqInit.body);
     const buffer = await this._ratchet.encrypt(serverID, packet);
     return Buffer.from(buffer);
   }
 
   async decryptFetchResponse(buffer) {
     const packet = await this._ratchet.decrypt(buffer);
-    const response = decode$1(Buffer.from(packet));
+    const response = lobEnc.decode(Buffer.from(packet));
     return response;
   }
 
@@ -13691,7 +14021,7 @@ class RatchetClient {
       const outer = await this._fetch(`http://${this._host}`, config);
       const outerb = await outer.arrayBuffer();
       const innerb = await this.decryptFetchResponse(Buffer.from(outerb));
-      const resp = decode$1(Buffer.from(innerb));
+      const resp = lobEnc.decode(Buffer.from(innerb));
       console.log("decrypted response", resp);
       return new Response(resp.body, resp.json);
     };
@@ -13710,7 +14040,7 @@ class RatchetClient {
         const outer = await this._fetch(`http://${this._host}`, config);
         const outerb = await outer.arrayBuffer();
         const innerb = await this.decryptFetchResponse(Buffer.from(outerb));
-        const resp = decode$1(Buffer.from(innerb));
+        const resp = lobEnc.decode(Buffer.from(innerb));
         console.log("decrypted response", resp);
         return new Response(resp.body, resp.json);
       });
