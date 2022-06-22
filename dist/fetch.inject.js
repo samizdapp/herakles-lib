@@ -23527,6 +23527,7 @@
       this.onAddress = onAddress;
       this._job = Promise.resolve();
       this._lastAddress = host;
+      this._pending = new Set();
     }
 
     async init() {
@@ -23556,6 +23557,13 @@
       }
 
       return { reqObj, reqInit };
+    }
+
+    abort() {
+      Array.from(this._pending).forEach((e) => {
+        e.emit("abort", new Error("aborted"));
+        this._pending.delete(e);
+      });
     }
 
     async pocketFetch(reqObj, reqInit = {}, xhr = {}) {
@@ -23604,27 +23612,36 @@
       console.log("pocketFetch4", eventEmitter, eventEmitter.msgId);
 
       if (eventEmitter) {
-        eventEmitter = eventEmitter.eventEmitter;
-        const chunks = [];
-        let clen = 0;
-        do {
-          const chunk = await build.once(eventEmitter, "reply");
-          console.log("chunk", uuid, chunk);
-          chunks.push(Buffer$1.from(chunk.data));
-          clen = chunk.data.length;
-        } while (clen > 0);
-        console.log("concat reply", chunks);
-        const reply = Buffer$1.concat(chunks);
-        this._lastAddress = client.address;
-        const resp = lobEnc.decode(reply);
-        const { lan, wan } = resp.json;
-        this.handleAddresses({ lan, wan });
-        console.log("resp.json", resp.body, resp.json.res);
-        resp.json.res.headers = new Headers(resp.json.res.headers);
-        // alert("complete");
-        return new Response(resp.body, resp.json.res);
+        return new Promise(async (resolve, reject) => {
+          eventEmitter = eventEmitter.eventEmitter;
+          eventEmitter.on("error", reject);
+          eventEmitter.on("abort", () => {
+            // alert("abort");
+            resolve(new Response(undefined, { ok: false }));
+          });
+          this._pending.add(eventEmitter);
+          const chunks = [];
+          let clen = 0;
+          do {
+            const chunk = await build.once(eventEmitter, "reply");
+            console.log("chunk", uuid, chunk);
+            chunks.push(Buffer$1.from(chunk.data));
+            clen = chunk.data.length;
+          } while (clen > 0);
+          console.log("concat reply", chunks);
+          const reply = Buffer$1.concat(chunks);
+          this._lastAddress = client.address;
+          const resp = lobEnc.decode(reply);
+          const { lan, wan } = resp.json;
+          this.handleAddresses({ lan, wan });
+          console.log("resp.json", resp.body, resp.json.res);
+          resp.json.res.headers = new Headers(resp.json.res.headers);
+          // alert("complete");
+          this._pending.delete(eventEmitter);
+          resolve(new Response(resp.body, resp.json.res));
+        });
       } else {
-        return Promise.reject("got no eventEmitter");
+        return new Response(undefined, { ok: false });
       }
       // });
 
@@ -23646,56 +23663,62 @@
         return _open.bind(this)(method, url);
       };
       XMLHttpRequest.prototype.send = async function (body) {
-        console.log("xhr.send", this);
-        const url = this._url;
-        const method = this._method;
-        const init = { method };
-        if (body) init.body = body;
-        const res = await fetch(url, init, this).catch((e) => {
-          console.log("fetch error", e);
-        });
-        console.log("got res", res);
-        const text = await res.text();
+        try {
+          console.log("xhr.send", this);
+          const url = this._url;
+          const method = this._method;
+          const init = { method };
+          if (body) init.body = body;
+          const res = await fetch(url, init, this);
+          if (!res.ok) {
+            this.dispatchEvent(new Event("error"));
+            return;
+          }
+          console.log("got res", res);
+          const text = await res.text();
 
-        Object.defineProperties(this, {
-          status: {
-            get: () => res.status,
-          },
-          statusText: {
-            get: () => res.statusText,
-          },
-          response: {
-            get: () => text,
-          },
-          responseText: {
-            get: () => text,
-          },
-          readyState: {
-            get: () => XMLHttpRequest.DONE,
-          },
-          getResponseHeader: {
-            value: (key) => res.headers.get(key),
-          },
-          getAllResponseHeaders: {
-            value: () => {
-              let res = [];
-              for (const pair of res.headers.entries) {
-                res.push(`${pair[0]}: ${pair[1]}`);
-              }
-              return res.join("\r\n");
+          Object.defineProperties(this, {
+            status: {
+              get: () => res.status,
             },
-          },
-        });
-        console.log(
-          "xhr got res",
-          method,
-          url,
-          this.responseText,
-          this.readyState
-        );
-        this.dispatchEvent(new Event("load"));
-        this.dispatchEvent(new Event("loadend"));
-        this.dispatchEvent(new Event("readystatechange"));
+            statusText: {
+              get: () => res.statusText,
+            },
+            response: {
+              get: () => text,
+            },
+            responseText: {
+              get: () => text,
+            },
+            readyState: {
+              get: () => XMLHttpRequest.DONE,
+            },
+            getResponseHeader: {
+              value: (key) => res.headers.get(key),
+            },
+            getAllResponseHeaders: {
+              value: () => {
+                let res = [];
+                for (const pair of res.headers.entries) {
+                  res.push(`${pair[0]}: ${pair[1]}`);
+                }
+                return res.join("\r\n");
+              },
+            },
+          });
+          console.log(
+            "xhr got res",
+            method,
+            url,
+            this.responseText,
+            this.readyState
+          );
+          this.dispatchEvent(new Event("load"));
+          this.dispatchEvent(new Event("loadend"));
+          this.dispatchEvent(new Event("readystatechange"));
+        } catch (e) {
+          this.dispatchEvent(new Event("error", e));
+        }
       };
     }
   }
@@ -23703,13 +23726,16 @@
   window.setImmediate = (fn) => setTimeout(fn, 0);
 
   async function patchFetch(host, port) {
-    const client = new PocketClient({ host, port }, ({ lan, wan }) => {
+    if (window._patch_fetch_client) {
+      window._patch_fetch_client.abort();
+    }
+    window._patch_fetch_client = new PocketClient({ host, port }, ({ lan, wan }) => {
       if (window.ReactNativeWebView) {
         window.ReactNativeWebView.postMessage(JSON.stringify({ lan, wan }));
       }
     });
-    await client.init();
-    client.patchFetchBrowser();
+    await window._patch_fetch_client.init();
+    window._patch_fetch_client.patchFetchBrowser();
   }
 
   patchFetch(window.location.hostname, 4000);
