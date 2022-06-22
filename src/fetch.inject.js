@@ -11,4 +11,4 @@ async function patchFetch(host, port) {
   client.patchFetchBrowser();
 }
 
-patchFetch(window.location.hostname, 3000);
+patchFetch(window.location.hostname, 4000);

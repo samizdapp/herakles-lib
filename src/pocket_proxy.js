@@ -41,7 +41,7 @@ const getExternalIp = async () =>
   });
 
 export default class PocketProxy {
-  constructor({ host = "0.0.0.0", port = 3000, lan = "127.0.0.1" }) {
+  constructor({ host = "0.0.0.0", port = 4000, lan = "127.0.0.1" }) {
     this._lan = lan;
     this._pending = new Map();
     this._server = new WSServer({
