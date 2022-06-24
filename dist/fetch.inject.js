@@ -23478,6 +23478,9 @@
         _client.onClose(() => {
           if (client) {
             client.close();
+            this._client = null;
+            this._gettingClient = false;
+            this.getClient();
           }
           // alert(`closed ${address}`);
         });
@@ -23670,13 +23673,9 @@
           const init = { method };
           if (body) init.body = body;
           const res = await fetch(url, init, this);
-          if (!res.ok) {
-            this.dispatchEvent(new Event("error"));
-            return;
-          }
           console.log("got res", res);
           const text = await res.text();
-
+          // console.log("");
           Object.defineProperties(this, {
             status: {
               get: () => res.status,
@@ -23717,6 +23716,7 @@
           this.dispatchEvent(new Event("loadend"));
           this.dispatchEvent(new Event("readystatechange"));
         } catch (e) {
+          console.log("xhr error", e);
           this.dispatchEvent(new Event("error", e));
         }
       };

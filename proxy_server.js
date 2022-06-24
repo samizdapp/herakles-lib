@@ -5,7 +5,7 @@ async function main() {
   const lan = JSON.parse(
     fs.readFileSync("./upnp/addresses").toString("utf-8").trim()
   ).pop();
-  const p = new PocketProxy({ lan });
+  const p = new PocketProxy({ lan, port: 4004 });
   await p.init();
 
   // p.listen();
