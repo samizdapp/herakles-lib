@@ -23553,7 +23553,7 @@
         const url = new URL(reqObj);
         reqInit.headers = reqInit.headers || {};
         reqInit.headers["X-Intercepted-Subdomain"] = url.hostname;
-        url.host = "daemon_caddy";
+        url.host = "localhost";
         url.protocol = "http:";
         url.port = "80";
         reqObj = url.toString();
