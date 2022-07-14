@@ -21811,7 +21811,7 @@
 
   var libsodiumWrappers = {};
 
-  var __dirname = '/home/ryan/work/roanext/lib/node_modules/libsodium/dist/modules';
+  var __dirname = '/home/ryan/work/herakles/lib/node_modules/libsodium/dist/modules';
 
   var libsodium = {exports: {}};
 
@@ -23477,6 +23477,7 @@
         });
         _client.onClose(() => {
           if (client) {
+            console.log("client closed");
             client.close();
             this._client = null;
             this._gettingClient = false;
@@ -23514,8 +23515,13 @@
     if (!body) return undefined;
     if (typeof body === "string") return Buffer$1.from(body);
     if (isBuffer(body)) return body;
+    if (body instanceof ArrayBuffer) {
+      if (body.byteLength > 0) return Buffer$1.from(new Uint8Array(body));
+      return undefined;
+    }
     if (body.arrayBuffer)
       return Buffer$1.from(new Uint8Array(await body.arrayBuffer()));
+
     throw new Error(`don't know how to handle body`);
   }
 
@@ -23548,16 +23554,51 @@
       setTimeout(() => this.onAddress({ lan, wan }), 0);
     }
 
-    patchFetchArgs(reqObj, reqInit) {
-      if (typeof reqObj === "string" && reqObj.startsWith("http")) {
-        const url = new URL(reqObj);
-        reqInit.headers = reqInit.headers || {};
-        reqInit.headers["X-Intercepted-Subdomain"] = url.hostname;
+    patchFetchArgs(_reqObj, _reqInit) {
+      // if (typeof _reqObj === "string" && _reqObj.startsWith("http")) {
+      console.log("patch");
+      const url = new URL(_reqObj.url);
+      _reqInit.headers = _reqObj.headers || {};
+      const pathParts = url.pathname.split("/").filter((_) => _);
+      if (pathParts[0] === "harnessed") {
+        _reqInit.headers["X-Intercepted-Subdomain"] = pathParts[1];
+        this.subdomain = pathParts[1];
+      } else if (this.subdomain) {
+        _reqInit.headers["X-Intercepted-Subdomain"] = this.subdomain;
+      }
+
+      for (var pair of _reqObj.headers.entries()) {
+        _reqInit.headers[pair[0]] = pair[1];
+        console.log(pair[0] + ": " + pair[1]);
+      }
+
+      if (url.host === self.location.hostname) {
+        console.log("subdomain", _reqInit);
         url.host = "localhost";
         url.protocol = "http:";
         url.port = "80";
-        reqObj = url.toString();
       }
+
+      // }
+
+      const reqObj = {
+        bodyUsed: _reqObj.bodyUsed,
+        cache: _reqObj.cache,
+        credentials: _reqObj.credentials,
+        destination: _reqObj.destination,
+        headers: _reqObj.headers,
+        integrity: _reqObj.integrity,
+        isHistoryNavigation: _reqObj.isHistoryNavigation,
+        keepalive: _reqObj.keepalive,
+        method: _reqObj.method,
+        mode: _reqObj.mode,
+        redirect: _reqObj.redirect,
+        referrer: _reqObj.referrer,
+        referrerPolicy: _reqObj.referrerPolicy,
+        url: url.toString(),
+      };
+
+      const reqInit = _reqInit;
 
       return { reqObj, reqInit };
     }
@@ -23577,10 +23618,10 @@
       // this._job = this._job.then(async () => {
       console.log("pocketFetch", xhr, reqObj, reqInit);
       const patched = this.patchFetchArgs(reqObj, reqInit);
+      const body = reqObj.body || reqInit.body || (await reqObj.arrayBuffer());
       reqObj = patched.reqObj;
       reqInit = patched.reqInit;
-      console.log("pocketFetch2", reqObj, reqInit);
-      const body = reqObj.body || reqInit.body;
+      console.log("pocketFetch2", reqObj, reqInit, body);
       delete reqObj.body;
       delete reqInit.body;
       const pbody = await normalizeBody(body);
@@ -23656,6 +23697,11 @@
       window.fetch = this.pocketFetch.bind(this);
 
       this.patchXHR();
+    }
+
+    async patchFetchWorker() {
+      this._fetch = self.fetch.bind(self);
+      self.fetch = this.pocketFetch.bind(this);
     }
 
     patchXHR() {

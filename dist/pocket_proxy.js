@@ -141,19 +141,18 @@ class PocketProxy {
       json: { reqObj, reqInit },
       body,
     } = lobEnc.decode(Buffer.concat(chunks));
-    if (typeof reqObj === "string" && !reqObj.startsWith("http")) {
-      reqObj = `http://daemon_caddy${reqObj}`;
-    }
+
     console.log("url?", event, reqObj, reqInit);
-    reqInit = reqInit || {};
+    reqInit = reqObj;
     if (
       reqInit.method &&
       reqInit.method !== "HEAD" &&
       reqInit.method !== "GET"
     ) {
-      reqInit.body = body;
+      console.log("set body", body);
+      reqObj.body = body;
     }
-    const fres = await fetch__default["default"](reqObj, reqInit);
+    const fres = await fetch__default["default"](reqObj.url, reqObj);
     const resb = await fres.arrayBuffer();
     const res = getResponseJSON(fres);
     const forward = lobEnc.encode({ res, lan, wan }, Buffer.from(resb));
