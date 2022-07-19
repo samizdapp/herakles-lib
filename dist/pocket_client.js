@@ -23453,18 +23453,25 @@ class ClientManager {
         // alert(`resolve ${address}`);
         resolve(client);
       });
+
       _client.onError((e) => {
         if (client) {
           client.close();
         }
-        alert(`error ${address}`);
-        reject(e);
+        console.warn(`error connecting ${address}`);
+        setTimeout(async () => {
+          if (!this._client) {
+            resolve(await this.createClient(address));
+          } else {
+            reject(e);
+          }
+        }, 5000);
       });
+
       _client.onClose(() => {
         if (client) {
           console.log("client closed");
           client.close();
-          this._client = null;
           this._gettingClient = false;
           this.getClient();
         }
@@ -23478,7 +23485,12 @@ class ClientManager {
   async getClient() {
     if (!this._gettingClient) {
       this._gettingClient = true;
-      this._client = this._client || (await this.createClient(this._host));
+      this._client =
+        this._client ||
+        (await Promise.race(this.getAddresses().map(this.createClient)));
+      this._client.onClose(() => {
+        this._client = null;
+      });
     }
     while (!this._client) {
       await new Promise((r) => setTimeout(r, 50));
