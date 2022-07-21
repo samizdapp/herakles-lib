@@ -23503,7 +23503,9 @@
         this._gettingClient = true;
         this._client =
           this._client ||
-          (await Promise.race(this.getAddresses().map(this.createClient)));
+          (await Promise.race(
+            this.getAddresses().map(this.createClient.bind(this))
+          ));
         this._client.onClose(() => {
           this._client = null;
         });
@@ -23544,7 +23546,7 @@
       { id = 50, host = "localhost", port = 3000, namespace = "client" },
       onAddress = () => {}
     ) {
-      this._host = host;
+      this._host = `${host}:${port}`;
       this._port = port;
       this._clientManager = new ClientManager({ host, port });
       this.onAddress = onAddress;
@@ -23715,7 +23717,7 @@
 
     async patchFetchWorker() {
       this._fetch = self.fetch.bind(self);
-      this._host = self.location.hostname;
+      this._host = `${self.location.hostname}:${this._port}`;
       self.fetch = this.pocketFetch.bind(this);
     }
 
