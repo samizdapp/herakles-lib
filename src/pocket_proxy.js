@@ -1,18 +1,14 @@
 import { decode, encode } from "lob-enc";
-import { WSServer, WSClient, Client } from "pocket-sockets";
+import { WSServer } from "pocket-sockets";
 import {
   HandshakeAsServer,
   Messaging,
   init,
   genKeyPair,
-  once,
 } from "pocket-messaging";
 import fetch from "cross-fetch";
-import getExternalIpCB from "external-ip";
 
 const CHUNK_SIZE = 65535;
-
-const ipGetter = getExternalIpCB();
 
 const getHeadersJSON = (h) => {
   const ret = {};
@@ -32,17 +28,10 @@ const getResponseJSON = (r) => ({
   url: r.url,
 });
 
-const getExternalIp = async () =>
-  new Promise((resolve, reject) => {
-    ipGetter((err, ip) => {
-      if (err) return reject(err);
-      resolve(ip);
-    });
-  });
-
 export default class PocketProxy {
-  constructor({ host = "0.0.0.0", port = 4000, lan = "127.0.0.1" }) {
+  constructor({ host = "0.0.0.0", port = 4000, lan = "127.0.0.1", wan }) {
     this._lan = lan;
+    this._wan = wan;
     this._pending = new Map();
     this._server = new WSServer({
       host,
@@ -132,9 +121,9 @@ export default class PocketProxy {
     console.log("hadling request");
     this._pending.delete(target);
     const lan = this._lan;
+    const wan = this._wan;
 
-    const wan = await getExternalIp();
-    console.log("lanwan", this._lan, wan);
+    console.log("lanwan", this._lan, this._wan);
 
     let {
       json: { reqObj, reqInit },

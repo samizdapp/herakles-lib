@@ -4,16 +4,12 @@ var lobEnc = require('lob-enc');
 var pocketSockets = require('pocket-sockets');
 var pocketMessaging = require('pocket-messaging');
 var fetch = require('cross-fetch');
-var getExternalIpCB = require('external-ip');
 
 function _interopDefaultLegacy (e) { return e && typeof e === 'object' && 'default' in e ? e : { 'default': e }; }
 
 var fetch__default = /*#__PURE__*/_interopDefaultLegacy(fetch);
-var getExternalIpCB__default = /*#__PURE__*/_interopDefaultLegacy(getExternalIpCB);
 
 const CHUNK_SIZE = 65535;
-
-const ipGetter = getExternalIpCB__default["default"]();
 
 const getHeadersJSON = (h) => {
   const ret = {};
@@ -33,17 +29,10 @@ const getResponseJSON = (r) => ({
   url: r.url,
 });
 
-const getExternalIp = async () =>
-  new Promise((resolve, reject) => {
-    ipGetter((err, ip) => {
-      if (err) return reject(err);
-      resolve(ip);
-    });
-  });
-
 class PocketProxy {
-  constructor({ host = "0.0.0.0", port = 4000, lan = "127.0.0.1" }) {
+  constructor({ host = "0.0.0.0", port = 4000, lan = "127.0.0.1", wan }) {
     this._lan = lan;
+    this._wan = wan;
     this._pending = new Map();
     this._server = new pocketSockets.WSServer({
       host,
@@ -133,9 +122,9 @@ class PocketProxy {
     console.log("hadling request");
     this._pending.delete(target);
     const lan = this._lan;
+    const wan = this._wan;
 
-    const wan = await getExternalIp();
-    console.log("lanwan", this._lan, wan);
+    console.log("lanwan", this._lan, this._wan);
 
     let {
       json: { reqObj, reqInit },

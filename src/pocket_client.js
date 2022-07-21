@@ -42,11 +42,12 @@ class ClientManager {
 
   async createClient(address) {
     return new Promise((resolve, reject) => {
-      console.log("create Client", address, this._port);
+      const [host, port] = address.split(":");
+      console.log("create client", host, port);
       let client;
       const _client = new WSClient({
-        host: address,
-        port: this._port,
+        host,
+        port,
       });
 
       _client.onConnect(async () => {
@@ -140,7 +141,8 @@ class ClientManager {
   }
 
   getAddresses() {
-    return Array.from(this._addresses).concat([this._host]);
+    const lanwan = Array.from(this._addresses);
+    return lanwan.length ? lanwan : [`${this._host}:${this.port}`];
   }
 
   async connect(address, attempt) {
