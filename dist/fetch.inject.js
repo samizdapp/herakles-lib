@@ -23713,6 +23713,7 @@
 
     async patchFetchWorker() {
       this._fetch = self.fetch.bind(self);
+      this._host = self.location.hostname;
       self.fetch = this.pocketFetch.bind(this);
     }
 

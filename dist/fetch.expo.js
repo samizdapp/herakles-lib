@@ -3078,7 +3078,7 @@ var indexMinimal = {};
 
 var minimal = {};
 
-var aspromise = asPromise$1;
+var aspromise = asPromise;
 
 /**
  * Callback as used by {@link util.asPromise}.
@@ -3097,7 +3097,7 @@ var aspromise = asPromise$1;
  * @param {...*} params Function arguments
  * @returns {Promise<*>} Promisified function
  */
-function asPromise$1(fn, ctx/*, varargs */) {
+function asPromise(fn, ctx/*, varargs */) {
     var params  = new Array(arguments.length - 1),
         offset  = 0,
         index   = 2,
@@ -3683,7 +3683,7 @@ function readUintBE(buf, pos) {
           | buf[pos + 3]) >>> 0;
 }
 
-var inquire_1 = inquire$1;
+var inquire_1 = inquire;
 
 /**
  * Requires a module only if available.
@@ -3691,7 +3691,7 @@ var inquire_1 = inquire$1;
  * @param {string} moduleName Module to require
  * @returns {?Object} Required module if available and not empty, otherwise `null`
  */
-function inquire$1(moduleName) {
+function inquire(moduleName) {
     try {
         var mod = eval("quire".replace(/^/,"re"))(moduleName); // eslint-disable-line no-eval
         if (mod && (mod.length || Object.keys(mod).length))
@@ -5731,288 +5731,311 @@ var roots = {};
 
 var util$2 = {exports: {}};
 
-var codegen_1 = codegen;
+var codegen_1;
+var hasRequiredCodegen;
 
-/**
- * Begins generating a function.
- * @memberof util
- * @param {string[]} functionParams Function parameter names
- * @param {string} [functionName] Function name if not anonymous
- * @returns {Codegen} Appender that appends code to the function's body
- */
-function codegen(functionParams, functionName) {
+function requireCodegen () {
+	if (hasRequiredCodegen) return codegen_1;
+	hasRequiredCodegen = 1;
+	codegen_1 = codegen;
 
-    /* istanbul ignore if */
-    if (typeof functionParams === "string") {
-        functionName = functionParams;
-        functionParams = undefined;
-    }
+	/**
+	 * Begins generating a function.
+	 * @memberof util
+	 * @param {string[]} functionParams Function parameter names
+	 * @param {string} [functionName] Function name if not anonymous
+	 * @returns {Codegen} Appender that appends code to the function's body
+	 */
+	function codegen(functionParams, functionName) {
 
-    var body = [];
+	    /* istanbul ignore if */
+	    if (typeof functionParams === "string") {
+	        functionName = functionParams;
+	        functionParams = undefined;
+	    }
 
-    /**
-     * Appends code to the function's body or finishes generation.
-     * @typedef Codegen
-     * @type {function}
-     * @param {string|Object.<string,*>} [formatStringOrScope] Format string or, to finish the function, an object of additional scope variables, if any
-     * @param {...*} [formatParams] Format parameters
-     * @returns {Codegen|Function} Itself or the generated function if finished
-     * @throws {Error} If format parameter counts do not match
-     */
+	    var body = [];
 
-    function Codegen(formatStringOrScope) {
-        // note that explicit array handling below makes this ~50% faster
+	    /**
+	     * Appends code to the function's body or finishes generation.
+	     * @typedef Codegen
+	     * @type {function}
+	     * @param {string|Object.<string,*>} [formatStringOrScope] Format string or, to finish the function, an object of additional scope variables, if any
+	     * @param {...*} [formatParams] Format parameters
+	     * @returns {Codegen|Function} Itself or the generated function if finished
+	     * @throws {Error} If format parameter counts do not match
+	     */
 
-        // finish the function
-        if (typeof formatStringOrScope !== "string") {
-            var source = toString();
-            if (codegen.verbose)
-                console.log("codegen: " + source); // eslint-disable-line no-console
-            source = "return " + source;
-            if (formatStringOrScope) {
-                var scopeKeys   = Object.keys(formatStringOrScope),
-                    scopeParams = new Array(scopeKeys.length + 1),
-                    scopeValues = new Array(scopeKeys.length),
-                    scopeOffset = 0;
-                while (scopeOffset < scopeKeys.length) {
-                    scopeParams[scopeOffset] = scopeKeys[scopeOffset];
-                    scopeValues[scopeOffset] = formatStringOrScope[scopeKeys[scopeOffset++]];
-                }
-                scopeParams[scopeOffset] = source;
-                return Function.apply(null, scopeParams).apply(null, scopeValues); // eslint-disable-line no-new-func
-            }
-            return Function(source)(); // eslint-disable-line no-new-func
-        }
+	    function Codegen(formatStringOrScope) {
+	        // note that explicit array handling below makes this ~50% faster
 
-        // otherwise append to body
-        var formatParams = new Array(arguments.length - 1),
-            formatOffset = 0;
-        while (formatOffset < formatParams.length)
-            formatParams[formatOffset] = arguments[++formatOffset];
-        formatOffset = 0;
-        formatStringOrScope = formatStringOrScope.replace(/%([%dfijs])/g, function replace($0, $1) {
-            var value = formatParams[formatOffset++];
-            switch ($1) {
-                case "d": case "f": return String(Number(value));
-                case "i": return String(Math.floor(value));
-                case "j": return JSON.stringify(value);
-                case "s": return String(value);
-            }
-            return "%";
-        });
-        if (formatOffset !== formatParams.length)
-            throw Error("parameter count mismatch");
-        body.push(formatStringOrScope);
-        return Codegen;
-    }
+	        // finish the function
+	        if (typeof formatStringOrScope !== "string") {
+	            var source = toString();
+	            if (codegen.verbose)
+	                console.log("codegen: " + source); // eslint-disable-line no-console
+	            source = "return " + source;
+	            if (formatStringOrScope) {
+	                var scopeKeys   = Object.keys(formatStringOrScope),
+	                    scopeParams = new Array(scopeKeys.length + 1),
+	                    scopeValues = new Array(scopeKeys.length),
+	                    scopeOffset = 0;
+	                while (scopeOffset < scopeKeys.length) {
+	                    scopeParams[scopeOffset] = scopeKeys[scopeOffset];
+	                    scopeValues[scopeOffset] = formatStringOrScope[scopeKeys[scopeOffset++]];
+	                }
+	                scopeParams[scopeOffset] = source;
+	                return Function.apply(null, scopeParams).apply(null, scopeValues); // eslint-disable-line no-new-func
+	            }
+	            return Function(source)(); // eslint-disable-line no-new-func
+	        }
 
-    function toString(functionNameOverride) {
-        return "function " + (functionNameOverride || functionName || "") + "(" + (functionParams && functionParams.join(",") || "") + "){\n  " + body.join("\n  ") + "\n}";
-    }
+	        // otherwise append to body
+	        var formatParams = new Array(arguments.length - 1),
+	            formatOffset = 0;
+	        while (formatOffset < formatParams.length)
+	            formatParams[formatOffset] = arguments[++formatOffset];
+	        formatOffset = 0;
+	        formatStringOrScope = formatStringOrScope.replace(/%([%dfijs])/g, function replace($0, $1) {
+	            var value = formatParams[formatOffset++];
+	            switch ($1) {
+	                case "d": case "f": return String(Number(value));
+	                case "i": return String(Math.floor(value));
+	                case "j": return JSON.stringify(value);
+	                case "s": return String(value);
+	            }
+	            return "%";
+	        });
+	        if (formatOffset !== formatParams.length)
+	            throw Error("parameter count mismatch");
+	        body.push(formatStringOrScope);
+	        return Codegen;
+	    }
 
-    Codegen.toString = toString;
-    return Codegen;
+	    function toString(functionNameOverride) {
+	        return "function " + (functionNameOverride || functionName || "") + "(" + (functionParams && functionParams.join(",") || "") + "){\n  " + body.join("\n  ") + "\n}";
+	    }
+
+	    Codegen.toString = toString;
+	    return Codegen;
+	}
+
+	/**
+	 * Begins generating a function.
+	 * @memberof util
+	 * @function codegen
+	 * @param {string} [functionName] Function name if not anonymous
+	 * @returns {Codegen} Appender that appends code to the function's body
+	 * @variation 2
+	 */
+
+	/**
+	 * When set to `true`, codegen will log generated code to console. Useful for debugging.
+	 * @name util.codegen.verbose
+	 * @type {boolean}
+	 */
+	codegen.verbose = false;
+	return codegen_1;
 }
 
-/**
- * Begins generating a function.
- * @memberof util
- * @function codegen
- * @param {string} [functionName] Function name if not anonymous
- * @returns {Codegen} Appender that appends code to the function's body
- * @variation 2
- */
+var fetch_1;
+var hasRequiredFetch;
 
-/**
- * When set to `true`, codegen will log generated code to console. Useful for debugging.
- * @name util.codegen.verbose
- * @type {boolean}
- */
-codegen.verbose = false;
+function requireFetch () {
+	if (hasRequiredFetch) return fetch_1;
+	hasRequiredFetch = 1;
+	fetch_1 = fetch;
 
-var fetch_1 = fetch$1;
+	var asPromise = aspromise,
+	    inquire   = inquire_1;
 
-var asPromise = aspromise,
-    inquire   = inquire_1;
+	var fs = inquire("fs");
 
-var fs = inquire("fs");
+	/**
+	 * Node-style callback as used by {@link util.fetch}.
+	 * @typedef FetchCallback
+	 * @type {function}
+	 * @param {?Error} error Error, if any, otherwise `null`
+	 * @param {string} [contents] File contents, if there hasn't been an error
+	 * @returns {undefined}
+	 */
 
-/**
- * Node-style callback as used by {@link util.fetch}.
- * @typedef FetchCallback
- * @type {function}
- * @param {?Error} error Error, if any, otherwise `null`
- * @param {string} [contents] File contents, if there hasn't been an error
- * @returns {undefined}
- */
+	/**
+	 * Options as used by {@link util.fetch}.
+	 * @typedef FetchOptions
+	 * @type {Object}
+	 * @property {boolean} [binary=false] Whether expecting a binary response
+	 * @property {boolean} [xhr=false] If `true`, forces the use of XMLHttpRequest
+	 */
 
-/**
- * Options as used by {@link util.fetch}.
- * @typedef FetchOptions
- * @type {Object}
- * @property {boolean} [binary=false] Whether expecting a binary response
- * @property {boolean} [xhr=false] If `true`, forces the use of XMLHttpRequest
- */
+	/**
+	 * Fetches the contents of a file.
+	 * @memberof util
+	 * @param {string} filename File path or url
+	 * @param {FetchOptions} options Fetch options
+	 * @param {FetchCallback} callback Callback function
+	 * @returns {undefined}
+	 */
+	function fetch(filename, options, callback) {
+	    if (typeof options === "function") {
+	        callback = options;
+	        options = {};
+	    } else if (!options)
+	        options = {};
 
-/**
- * Fetches the contents of a file.
- * @memberof util
- * @param {string} filename File path or url
- * @param {FetchOptions} options Fetch options
- * @param {FetchCallback} callback Callback function
- * @returns {undefined}
- */
-function fetch$1(filename, options, callback) {
-    if (typeof options === "function") {
-        callback = options;
-        options = {};
-    } else if (!options)
-        options = {};
+	    if (!callback)
+	        return asPromise(fetch, this, filename, options); // eslint-disable-line no-invalid-this
 
-    if (!callback)
-        return asPromise(fetch$1, this, filename, options); // eslint-disable-line no-invalid-this
+	    // if a node-like filesystem is present, try it first but fall back to XHR if nothing is found.
+	    if (!options.xhr && fs && fs.readFile)
+	        return fs.readFile(filename, function fetchReadFileCallback(err, contents) {
+	            return err && typeof XMLHttpRequest !== "undefined"
+	                ? fetch.xhr(filename, options, callback)
+	                : err
+	                ? callback(err)
+	                : callback(null, options.binary ? contents : contents.toString("utf8"));
+	        });
 
-    // if a node-like filesystem is present, try it first but fall back to XHR if nothing is found.
-    if (!options.xhr && fs && fs.readFile)
-        return fs.readFile(filename, function fetchReadFileCallback(err, contents) {
-            return err && typeof XMLHttpRequest !== "undefined"
-                ? fetch$1.xhr(filename, options, callback)
-                : err
-                ? callback(err)
-                : callback(null, options.binary ? contents : contents.toString("utf8"));
-        });
+	    // use the XHR version otherwise.
+	    return fetch.xhr(filename, options, callback);
+	}
 
-    // use the XHR version otherwise.
-    return fetch$1.xhr(filename, options, callback);
+	/**
+	 * Fetches the contents of a file.
+	 * @name util.fetch
+	 * @function
+	 * @param {string} path File path or url
+	 * @param {FetchCallback} callback Callback function
+	 * @returns {undefined}
+	 * @variation 2
+	 */
+
+	/**
+	 * Fetches the contents of a file.
+	 * @name util.fetch
+	 * @function
+	 * @param {string} path File path or url
+	 * @param {FetchOptions} [options] Fetch options
+	 * @returns {Promise<string|Uint8Array>} Promise
+	 * @variation 3
+	 */
+
+	/**/
+	fetch.xhr = function fetch_xhr(filename, options, callback) {
+	    var xhr = new XMLHttpRequest();
+	    xhr.onreadystatechange /* works everywhere */ = function fetchOnReadyStateChange() {
+
+	        if (xhr.readyState !== 4)
+	            return undefined;
+
+	        // local cors security errors return status 0 / empty string, too. afaik this cannot be
+	        // reliably distinguished from an actually empty file for security reasons. feel free
+	        // to send a pull request if you are aware of a solution.
+	        if (xhr.status !== 0 && xhr.status !== 200)
+	            return callback(Error("status " + xhr.status));
+
+	        // if binary data is expected, make sure that some sort of array is returned, even if
+	        // ArrayBuffers are not supported. the binary string fallback, however, is unsafe.
+	        if (options.binary) {
+	            var buffer = xhr.response;
+	            if (!buffer) {
+	                buffer = [];
+	                for (var i = 0; i < xhr.responseText.length; ++i)
+	                    buffer.push(xhr.responseText.charCodeAt(i) & 255);
+	            }
+	            return callback(null, typeof Uint8Array !== "undefined" ? new Uint8Array(buffer) : buffer);
+	        }
+	        return callback(null, xhr.responseText);
+	    };
+
+	    if (options.binary) {
+	        // ref: https://developer.mozilla.org/en-US/docs/Web/API/XMLHttpRequest/Sending_and_Receiving_Binary_Data#Receiving_binary_data_in_older_browsers
+	        if ("overrideMimeType" in xhr)
+	            xhr.overrideMimeType("text/plain; charset=x-user-defined");
+	        xhr.responseType = "arraybuffer";
+	    }
+
+	    xhr.open("GET", filename);
+	    xhr.send();
+	};
+	return fetch_1;
 }
-
-/**
- * Fetches the contents of a file.
- * @name util.fetch
- * @function
- * @param {string} path File path or url
- * @param {FetchCallback} callback Callback function
- * @returns {undefined}
- * @variation 2
- */
-
-/**
- * Fetches the contents of a file.
- * @name util.fetch
- * @function
- * @param {string} path File path or url
- * @param {FetchOptions} [options] Fetch options
- * @returns {Promise<string|Uint8Array>} Promise
- * @variation 3
- */
-
-/**/
-fetch$1.xhr = function fetch_xhr(filename, options, callback) {
-    var xhr = new XMLHttpRequest();
-    xhr.onreadystatechange /* works everywhere */ = function fetchOnReadyStateChange() {
-
-        if (xhr.readyState !== 4)
-            return undefined;
-
-        // local cors security errors return status 0 / empty string, too. afaik this cannot be
-        // reliably distinguished from an actually empty file for security reasons. feel free
-        // to send a pull request if you are aware of a solution.
-        if (xhr.status !== 0 && xhr.status !== 200)
-            return callback(Error("status " + xhr.status));
-
-        // if binary data is expected, make sure that some sort of array is returned, even if
-        // ArrayBuffers are not supported. the binary string fallback, however, is unsafe.
-        if (options.binary) {
-            var buffer = xhr.response;
-            if (!buffer) {
-                buffer = [];
-                for (var i = 0; i < xhr.responseText.length; ++i)
-                    buffer.push(xhr.responseText.charCodeAt(i) & 255);
-            }
-            return callback(null, typeof Uint8Array !== "undefined" ? new Uint8Array(buffer) : buffer);
-        }
-        return callback(null, xhr.responseText);
-    };
-
-    if (options.binary) {
-        // ref: https://developer.mozilla.org/en-US/docs/Web/API/XMLHttpRequest/Sending_and_Receiving_Binary_Data#Receiving_binary_data_in_older_browsers
-        if ("overrideMimeType" in xhr)
-            xhr.overrideMimeType("text/plain; charset=x-user-defined");
-        xhr.responseType = "arraybuffer";
-    }
-
-    xhr.open("GET", filename);
-    xhr.send();
-};
 
 var path = {};
 
-(function (exports) {
+var hasRequiredPath;
 
-	/**
-	 * A minimal path module to resolve Unix, Windows and URL paths alike.
-	 * @memberof util
-	 * @namespace
-	 */
-	var path = exports;
+function requirePath () {
+	if (hasRequiredPath) return path;
+	hasRequiredPath = 1;
+	(function (exports) {
 
-	var isAbsolute =
-	/**
-	 * Tests if the specified path is absolute.
-	 * @param {string} path Path to test
-	 * @returns {boolean} `true` if path is absolute
-	 */
-	path.isAbsolute = function isAbsolute(path) {
-	    return /^(?:\/|\w+:)/.test(path);
-	};
+		/**
+		 * A minimal path module to resolve Unix, Windows and URL paths alike.
+		 * @memberof util
+		 * @namespace
+		 */
+		var path = exports;
 
-	var normalize =
-	/**
-	 * Normalizes the specified path.
-	 * @param {string} path Path to normalize
-	 * @returns {string} Normalized path
-	 */
-	path.normalize = function normalize(path) {
-	    path = path.replace(/\\/g, "/")
-	               .replace(/\/{2,}/g, "/");
-	    var parts    = path.split("/"),
-	        absolute = isAbsolute(path),
-	        prefix   = "";
-	    if (absolute)
-	        prefix = parts.shift() + "/";
-	    for (var i = 0; i < parts.length;) {
-	        if (parts[i] === "..") {
-	            if (i > 0 && parts[i - 1] !== "..")
-	                parts.splice(--i, 2);
-	            else if (absolute)
-	                parts.splice(i, 1);
-	            else
-	                ++i;
-	        } else if (parts[i] === ".")
-	            parts.splice(i, 1);
-	        else
-	            ++i;
-	    }
-	    return prefix + parts.join("/");
-	};
+		var isAbsolute =
+		/**
+		 * Tests if the specified path is absolute.
+		 * @param {string} path Path to test
+		 * @returns {boolean} `true` if path is absolute
+		 */
+		path.isAbsolute = function isAbsolute(path) {
+		    return /^(?:\/|\w+:)/.test(path);
+		};
 
-	/**
-	 * Resolves the specified include path against the specified origin path.
-	 * @param {string} originPath Path to the origin file
-	 * @param {string} includePath Include path relative to origin path
-	 * @param {boolean} [alreadyNormalized=false] `true` if both paths are already known to be normalized
-	 * @returns {string} Path to the include file
-	 */
-	path.resolve = function resolve(originPath, includePath, alreadyNormalized) {
-	    if (!alreadyNormalized)
-	        includePath = normalize(includePath);
-	    if (isAbsolute(includePath))
-	        return includePath;
-	    if (!alreadyNormalized)
-	        originPath = normalize(originPath);
-	    return (originPath = originPath.replace(/(?:\/|^)[^/]+$/, "")).length ? normalize(originPath + "/" + includePath) : includePath;
-	};
+		var normalize =
+		/**
+		 * Normalizes the specified path.
+		 * @param {string} path Path to normalize
+		 * @returns {string} Normalized path
+		 */
+		path.normalize = function normalize(path) {
+		    path = path.replace(/\\/g, "/")
+		               .replace(/\/{2,}/g, "/");
+		    var parts    = path.split("/"),
+		        absolute = isAbsolute(path),
+		        prefix   = "";
+		    if (absolute)
+		        prefix = parts.shift() + "/";
+		    for (var i = 0; i < parts.length;) {
+		        if (parts[i] === "..") {
+		            if (i > 0 && parts[i - 1] !== "..")
+		                parts.splice(--i, 2);
+		            else if (absolute)
+		                parts.splice(i, 1);
+		            else
+		                ++i;
+		        } else if (parts[i] === ".")
+		            parts.splice(i, 1);
+		        else
+		            ++i;
+		    }
+		    return prefix + parts.join("/");
+		};
+
+		/**
+		 * Resolves the specified include path against the specified origin path.
+		 * @param {string} originPath Path to the origin file
+		 * @param {string} includePath Include path relative to origin path
+		 * @param {boolean} [alreadyNormalized=false] `true` if both paths are already known to be normalized
+		 * @returns {string} Path to the include file
+		 */
+		path.resolve = function resolve(originPath, includePath, alreadyNormalized) {
+		    if (!alreadyNormalized)
+		        includePath = normalize(includePath);
+		    if (isAbsolute(includePath))
+		        return includePath;
+		    if (!alreadyNormalized)
+		        originPath = normalize(originPath);
+		    return (originPath = originPath.replace(/(?:\/|^)[^/]+$/, "")).length ? normalize(originPath + "/" + includePath) : includePath;
+		};
 } (path));
+	return path;
+}
 
 var types$1 = {};
 
@@ -9587,9 +9610,9 @@ function requireUtil () {
 		var Type, // cyclic
 		    Enum;
 
-		util.codegen = codegen_1;
-		util.fetch   = fetch_1;
-		util.path    = path;
+		util.codegen = requireCodegen();
+		util.fetch   = requireFetch();
+		util.path    = requirePath();
 
 		/**
 		 * Node's fs module if available.
