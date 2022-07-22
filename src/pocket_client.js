@@ -112,6 +112,7 @@ class ClientManager {
       _client.onClose(() => {
         if (client) {
           console.log("client closed");
+          if (client.onClose) client.onClose();
           client.close();
           this._gettingClient = false;
           this.getClient();
@@ -131,9 +132,9 @@ class ClientManager {
         (await Promise.race(
           this.getAddresses().map(this.createClient.bind(this))
         ));
-      this._client.onClose(() => {
+      this._client.onClose = () => {
         this._client = null;
-      });
+      };
     }
     while (!this._client) {
       await new Promise((r) => setTimeout(r, 50));
