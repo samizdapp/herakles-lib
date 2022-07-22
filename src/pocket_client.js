@@ -24,7 +24,7 @@ function randomRoute() {
 
 class ClientManager {
   constructor({ host, port }) {
-    this._host = host;
+    this._host = self.location.hostname;
     this._port = port;
     this._addresses = new Set();
     this._clients = new Map();
@@ -144,7 +144,7 @@ class ClientManager {
 
   getAddresses() {
     const lanwan = Array.from(this._addresses);
-    return lanwan.length ? lanwan : [`${this._host}:${this.port}`];
+    return lanwan.length ? lanwan : [`${this._host}:${this._port}`];
   }
 
   async connect(address, attempt) {
