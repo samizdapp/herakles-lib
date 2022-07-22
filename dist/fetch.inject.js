@@ -23450,22 +23450,22 @@
     }
 
     async getClient() {
-      if (!this._gettingClient) {
-        this._gettingClient = true;
-        this._client =
-          this._client ||
-          (await Promise.race(
-            this.getAddresses().map(this.createClient.bind(this))
-          ));
-        this._client.onClose = () => {
-          this._client = null;
-        };
-      }
-      while (!this._client) {
-        await new Promise((r) => setTimeout(r, 50));
-      }
+      // if (!this._gettingClient) {
+      //   this._gettingClient = true;
+      //   this._client =
+      //     this._client ||
+      //     (await Promise.race(
+      //       this.getAddresses().map(this.createClient.bind(this))
+      //     ));
+      //   this._client.onClose = () => {
+      //     this._client = null;
+      //   };
+      // }
+      // while (!this._client) {
+      //   await new Promise((r) => setTimeout(r, 50));
+      // }
 
-      return this._client;
+      return Promise.race(this.getAddresses().map(this.createClient.bind(this)));
     }
 
     getAddresses() {
