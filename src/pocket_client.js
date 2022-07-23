@@ -160,7 +160,7 @@ async function normalizeBody(body) {
     if (body.arrayBuffer) {
       return Buffer.from(new Uint8Array(await body.arrayBuffer()));
     }
-    if (body instanceof ReadableStream) {
+    if (body.toString === "[object ReadableStream]") {
       const reader = body.getReader();
       const chunks = [];
       let _done = false;
