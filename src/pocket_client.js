@@ -108,7 +108,7 @@ class ClientManager {
 
           console.log("sent ping", sendres);
           if (!(sendres && sendres.eventEmitter)) {
-            return resolve(false);
+            return false;
           }
 
           const { eventEmitter } = sendres;
@@ -120,11 +120,11 @@ class ClientManager {
           ]);
           if (res === "timeout") {
             console.log("timeout");
-            return resolve(false);
+            return false;
           }
 
           console.log("is alive");
-          return resolve(true);
+          return true;
         };
         resolve(client);
       });
