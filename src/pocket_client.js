@@ -163,7 +163,7 @@ async function normalizeBody(body) {
 
     throw new Error(`don't know how to handle body`);
   } catch (e) {
-    return Buffer.from(0xdeadbeef);
+    return Buffer.from("deadbeef", "hex");
   }
 }
 
