@@ -23354,6 +23354,8 @@
       this._addresses = new Set();
       this._clients = new Map();
       this._job = Promise.resolve();
+
+      this.ORIGIN = `${this._host}:${this._port}`;
     }
 
     addAddress(address) {
@@ -23417,6 +23419,38 @@
 
           client.address = address;
           // alert(`resolve ${address}`);
+          client.alive = async () => {
+            console.log("send keepalive");
+            const timeout = new Promise((r) =>
+              setTimeout(() => r("timeout"), 5000)
+            );
+            const sendres = client.send(
+              "ping",
+              Buffer$2.from("deadbeef", "hex"),
+              5000,
+              true
+            );
+
+            console.log("sent ping", sendres);
+            if (!(sendres && sendres.eventEmitter)) {
+              return resolve(false);
+            }
+
+            const { eventEmitter } = sendres;
+
+            console.log("await response");
+            const res = await Promise.race([
+              timeout,
+              build.once(eventEmitter, "reply"),
+            ]);
+            if (res === "timeout") {
+              console.log("timeout");
+              return resolve(false);
+            }
+
+            console.log("is alive");
+            return resolve(true);
+          };
           resolve(client);
         });
 
@@ -23425,13 +23459,7 @@
             client.close();
           }
           console.warn(`error connecting ${address}`);
-          setTimeout(async () => {
-            if (!this._client) {
-              resolve(await this.createClient(address));
-            } else {
-              reject(e);
-            }
-          }, 5000);
+          reject(e);
         });
 
         _client.onClose(() => {
@@ -23440,7 +23468,7 @@
             if (client.onClose) client.onClose();
             client.close();
             this._gettingClient = false;
-            this.getClient();
+            // this.getClient();
           }
           // alert(`closed ${address}`);
         });
@@ -23449,19 +23477,45 @@
       });
     }
 
+    async raceNewClients() {
+      return Promise.race(
+        this.getAddresses().map((address) =>
+          this.createClient(address).catch((e) => {
+            console.debug("failed to get client for ".address);
+            console.debug(e);
+            return new Promise((r) => setTimeout(r, 5000));
+          })
+        )
+      );
+    }
+
     async getClient() {
-      if (!this._gettingClient) {
-        this._gettingClient = true;
-        this._client =
-          this._client ||
-          (await this.createClient(`${this._host}:${this._port}`));
+      while (this._getClientLock) {
+        await new Promise((r) => setTimeout(r, 100));
       }
-      while (!this._client) {
-        await new Promise((r) => setTimeout(r, 50));
+      this._getClientLock = true;
+
+      while (!(this._client && (await this._client.alive()))) {
+        this._client = await this.raceNewClients();
       }
 
+      this._getClientLock = false;
       return this._client;
     }
+
+    // async getClient() {
+    //   if (!this._gettingClient) {
+    //     this._gettingClient = true;
+    //     this._client =
+    //       this._client ||
+    //       (await this.createClient(`${this._host}:${this._port}`));
+    //   }
+    //   while (!this._client) {
+    //     await new Promise((r) => setTimeout(r, 50));
+    //   }
+
+    //   return this._client;
+    // }
 
     getAddresses() {
       const lanwan = Array.from(this._addresses);
