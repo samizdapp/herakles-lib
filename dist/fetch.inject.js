@@ -23483,7 +23483,7 @@
           this.createClient(address).catch((e) => {
             console.debug("failed to get client for ".address);
             console.debug(e);
-            return new Promise((r) => setTimeout(r, 5000));
+            return new Promise((r) => setTimeout(() => r(null), 5000));
           })
         )
       );
@@ -23495,7 +23495,7 @@
       }
       this._getClientLock = true;
 
-      while (!(this._client && (await this._client.alive()))) {
+      while (!this._client || !(await this._client.alive())) {
         this._client = await this.raceNewClients();
       }
 
