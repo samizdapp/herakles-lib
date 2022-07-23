@@ -107,6 +107,9 @@ class PocketProxy {
   async handleEvent(messaging, event) {
     console.log("handle event", event.data.length, event.data.byteLength);
     const target = event.target;
+    if (target === "keep") {
+      return messaging.send(event.fromMsgId, Buffer.from("alive"));
+    }
     const chunks = this._pending.get(target) || [];
     var copy = Buffer.alloc(event.data.length);
     event.data.copy(copy);

@@ -149,17 +149,22 @@ class ClientManager {
 }
 
 async function normalizeBody(body) {
-  if (!body) return undefined;
-  if (typeof body === "string") return Buffer.from(body);
-  if (Buffer.isBuffer(body)) return body;
-  if (body instanceof ArrayBuffer) {
-    if (body.byteLength > 0) return Buffer.from(new Uint8Array(body));
-    return undefined;
-  }
-  if (body.arrayBuffer)
-    return Buffer.from(new Uint8Array(await body.arrayBuffer()));
+  try {
+    if (!body) return undefined;
+    if (typeof body === "string") return Buffer.from(body);
+    if (Buffer.isBuffer(body)) return body;
+    if (body instanceof ArrayBuffer) {
+      if (body.byteLength > 0) return Buffer.from(new Uint8Array(body));
+      return undefined;
+    }
+    if (body.arrayBuffer) {
+      return Buffer.from(new Uint8Array(await body.arrayBuffer()));
+    }
 
-  throw new Error(`don't know how to handle body`);
+    throw new Error(`don't know how to handle body`);
+  } catch (e) {
+    return Buffer.from(0xdeadbeef);
+  }
 }
 
 export default class PocketClient {
@@ -177,7 +182,7 @@ export default class PocketClient {
   }
 
   async init() {
-    this._clientManager.init();
+    await this._clientManager.init();
   }
 
   async patchFetch() {
