@@ -23470,6 +23470,17 @@ async function normalizeBody(body) {
     if (body.arrayBuffer) {
       return Buffer$2.from(new Uint8Array(await body.arrayBuffer()));
     }
+    if (body instanceof ReadableStream) {
+      const reader = body.getReader();
+      const chunks = [];
+      let _done = false;
+      do {
+        const { done, value } = await reader.read();
+        _done = done;
+        chunks.push(Buffer$2.from(new Uint8Array(value)));
+      } while (!_done);
+      return Buffer$2.concat(chunks);
+    }
 
     throw new Error(`don't know how to handle body`);
   } catch (e) {

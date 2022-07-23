@@ -160,6 +160,17 @@ async function normalizeBody(body) {
     if (body.arrayBuffer) {
       return Buffer.from(new Uint8Array(await body.arrayBuffer()));
     }
+    if (body instanceof ReadableStream) {
+      const reader = body.getReader();
+      const chunks = [];
+      let _done = false;
+      do {
+        const { done, value } = await reader.read();
+        _done = done;
+        chunks.push(Buffer.from(new Uint8Array(value)));
+      } while (!_done);
+      return Buffer.concat(chunks);
+    }
 
     throw new Error(`don't know how to handle body`);
   } catch (e) {
