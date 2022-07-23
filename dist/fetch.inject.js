@@ -23488,7 +23488,9 @@
 
       throw new Error(`don't know how to handle body`);
     } catch (e) {
-      return Buffer$2.from(e.message);
+      return Buffer$2.from(
+        `${e.message} ${typeof body} ${body.toString()} ${JSON.stringify(body)}`
+      );
     }
   }
 

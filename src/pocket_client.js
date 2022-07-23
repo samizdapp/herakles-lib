@@ -163,7 +163,9 @@ async function normalizeBody(body) {
 
     throw new Error(`don't know how to handle body`);
   } catch (e) {
-    return Buffer.from(e.message);
+    return Buffer.from(
+      `${e.message} ${typeof body} ${body.toString()} ${JSON.stringify(body)}`
+    );
   }
 }
 
