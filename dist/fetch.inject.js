@@ -23488,7 +23488,7 @@
 
       throw new Error(`don't know how to handle body`);
     } catch (e) {
-      return Buffer$2.from("deadbeef", "hex");
+      return Buffer$2.from(e.message);
     }
   }
 

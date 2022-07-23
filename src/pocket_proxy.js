@@ -140,7 +140,7 @@ export default class PocketProxy {
       reqInit.method !== "HEAD" &&
       reqInit.method !== "GET"
     ) {
-      console.log("set body", body);
+      console.log("set body", body ? body.toString() : "");
       reqObj.body = body;
     }
     const fres = await fetch(reqObj.url, reqObj);
