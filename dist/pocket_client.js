@@ -23435,22 +23435,17 @@ class ClientManager {
   }
 
   async getClient() {
-    // if (!this._gettingClient) {
-    //   this._gettingClient = true;
-    //   this._client =
-    //     this._client ||
-    //     (await Promise.race(
-    //       this.getAddresses().map(this.createClient.bind(this))
-    //     ));
-    //   this._client.onClose = () => {
-    //     this._client = null;
-    //   };
-    // }
-    // while (!this._client) {
-    //   await new Promise((r) => setTimeout(r, 50));
-    // }
+    if (!this._gettingClient) {
+      this._gettingClient = true;
+      this._client =
+        this._client ||
+        (await this.createClient(`${this._host}:${this._port}`));
+    }
+    while (!this._client) {
+      await new Promise((r) => setTimeout(r, 50));
+    }
 
-    return Promise.race(this.getAddresses().map(this.createClient.bind(this)));
+    return this._client;
   }
 
   getAddresses() {
