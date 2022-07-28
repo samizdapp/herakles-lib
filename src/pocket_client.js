@@ -272,7 +272,7 @@ export default class PocketClient {
     if (pathParts[0] === "harnessed") {
       _reqInit.headers["X-Intercepted-Subdomain"] = pathParts[1];
       this.subdomain = pathParts[1];
-    } else if (this.subdomain) {
+    } else if (this.subdomain && url.pathname !== '/manifest.json') {
       _reqInit.headers["X-Intercepted-Subdomain"] = this.subdomain;
     }
 

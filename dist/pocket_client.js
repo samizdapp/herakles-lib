@@ -2125,69 +2125,41 @@ chacha20.encrypt = chacha20.decrypt = function(key, nonce, data)
   return ret;
 };
 
-var R = typeof Reflect === 'object' ? Reflect : null;
-var ReflectApply = R && typeof R.apply === 'function'
-  ? R.apply
-  : function ReflectApply(target, receiver, args) {
-    return Function.prototype.apply.call(target, receiver, args);
-  };
+var domain;
 
-var ReflectOwnKeys;
-if (R && typeof R.ownKeys === 'function') {
-  ReflectOwnKeys = R.ownKeys;
-} else if (Object.getOwnPropertySymbols) {
-  ReflectOwnKeys = function ReflectOwnKeys(target) {
-    return Object.getOwnPropertyNames(target)
-      .concat(Object.getOwnPropertySymbols(target));
-  };
-} else {
-  ReflectOwnKeys = function ReflectOwnKeys(target) {
-    return Object.getOwnPropertyNames(target);
-  };
-}
-
-function ProcessEmitWarning(warning) {
-  if (console && console.warn) console.warn(warning);
-}
-
-var NumberIsNaN = Number.isNaN || function NumberIsNaN(value) {
-  return value !== value;
-};
+// This constructor is used to store event handlers. Instantiating this is
+// faster than explicitly calling `Object.create(null)` to get a "clean" empty
+// object (tested with v8 v4.9).
+function EventHandlers() {}
+EventHandlers.prototype = Object.create(null);
 
 function EventEmitter$2() {
   EventEmitter$2.init.call(this);
 }
-var events = EventEmitter$2;
 
-// Backwards-compat with node 0.10.x
+// nodejs oddity
+// require('events') === require('events').EventEmitter
 EventEmitter$2.EventEmitter = EventEmitter$2;
 
+EventEmitter$2.usingDomains = false;
+
+EventEmitter$2.prototype.domain = undefined;
 EventEmitter$2.prototype._events = undefined;
-EventEmitter$2.prototype._eventsCount = 0;
 EventEmitter$2.prototype._maxListeners = undefined;
 
 // By default EventEmitters will print a warning if more than 10 listeners are
 // added to it. This is a useful default which helps finding memory leaks.
-var defaultMaxListeners = 10;
-
-Object.defineProperty(EventEmitter$2, 'defaultMaxListeners', {
-  enumerable: true,
-  get: function() {
-    return defaultMaxListeners;
-  },
-  set: function(arg) {
-    if (typeof arg !== 'number' || arg < 0 || NumberIsNaN(arg)) {
-      throw new RangeError('The value of "defaultMaxListeners" is out of range. It must be a non-negative number. Received ' + arg + '.');
-    }
-    defaultMaxListeners = arg;
-  }
-});
+EventEmitter$2.defaultMaxListeners = 10;
 
 EventEmitter$2.init = function() {
+  this.domain = null;
+  if (EventEmitter$2.usingDomains) {
+    // if there is an active domain, then attach to it.
+    if (domain.active ) ;
+  }
 
-  if (this._events === undefined ||
-      this._events === Object.getPrototypeOf(this)._events) {
-    this._events = Object.create(null);
+  if (!this._events || this._events === Object.getPrototypeOf(this)._events) {
+    this._events = new EventHandlers();
     this._eventsCount = 0;
   }
 
@@ -2197,9 +2169,8 @@ EventEmitter$2.init = function() {
 // Obviously not all Emitters should be limited to 10. This function allows
 // that to be increased. Set to zero for unlimited.
 EventEmitter$2.prototype.setMaxListeners = function setMaxListeners(n) {
-  if (typeof n !== 'number' || n < 0 || NumberIsNaN(n)) {
-    throw new RangeError('The value of "n" is out of range. It must be a non-negative number. Received ' + n + '.');
-  }
+  if (typeof n !== 'number' || n < 0 || isNaN(n))
+    throw new TypeError('"n" argument must be a positive number');
   this._maxListeners = n;
   return this;
 };
@@ -2214,45 +2185,123 @@ EventEmitter$2.prototype.getMaxListeners = function getMaxListeners() {
   return $getMaxListeners(this);
 };
 
-EventEmitter$2.prototype.emit = function emit(type) {
-  var args = [];
-  for (var i = 1; i < arguments.length; i++) args.push(arguments[i]);
-  var doError = (type === 'error');
-
-  var events = this._events;
-  if (events !== undefined)
-    doError = (doError && events.error === undefined);
-  else if (!doError)
-    return false;
-
-  // If there is no 'error' event listener then throw.
-  if (doError) {
-    var er;
-    if (args.length > 0)
-      er = args[0];
-    if (er instanceof Error) {
-      // Note: The comments on the `throw` lines are intentional, they show
-      // up in Node's output if this results in an unhandled exception.
-      throw er; // Unhandled 'error' event
-    }
-    // At least give some kind of context to the user
-    var err = new Error('Unhandled error.' + (er ? ' (' + er.message + ')' : ''));
-    err.context = er;
-    throw err; // Unhandled 'error' event
-  }
-
-  var handler = events[type];
-
-  if (handler === undefined)
-    return false;
-
-  if (typeof handler === 'function') {
-    ReflectApply(handler, this, args);
-  } else {
+// These standalone emit* functions are used to optimize calling of event
+// handlers for fast cases because emit() itself often has a variable number of
+// arguments and can be deoptimized because of that. These functions always have
+// the same number of arguments and thus do not get deoptimized, so the code
+// inside them can execute faster.
+function emitNone(handler, isFn, self) {
+  if (isFn)
+    handler.call(self);
+  else {
     var len = handler.length;
     var listeners = arrayClone(handler, len);
     for (var i = 0; i < len; ++i)
-      ReflectApply(listeners[i], this, args);
+      listeners[i].call(self);
+  }
+}
+function emitOne(handler, isFn, self, arg1) {
+  if (isFn)
+    handler.call(self, arg1);
+  else {
+    var len = handler.length;
+    var listeners = arrayClone(handler, len);
+    for (var i = 0; i < len; ++i)
+      listeners[i].call(self, arg1);
+  }
+}
+function emitTwo(handler, isFn, self, arg1, arg2) {
+  if (isFn)
+    handler.call(self, arg1, arg2);
+  else {
+    var len = handler.length;
+    var listeners = arrayClone(handler, len);
+    for (var i = 0; i < len; ++i)
+      listeners[i].call(self, arg1, arg2);
+  }
+}
+function emitThree(handler, isFn, self, arg1, arg2, arg3) {
+  if (isFn)
+    handler.call(self, arg1, arg2, arg3);
+  else {
+    var len = handler.length;
+    var listeners = arrayClone(handler, len);
+    for (var i = 0; i < len; ++i)
+      listeners[i].call(self, arg1, arg2, arg3);
+  }
+}
+
+function emitMany(handler, isFn, self, args) {
+  if (isFn)
+    handler.apply(self, args);
+  else {
+    var len = handler.length;
+    var listeners = arrayClone(handler, len);
+    for (var i = 0; i < len; ++i)
+      listeners[i].apply(self, args);
+  }
+}
+
+EventEmitter$2.prototype.emit = function emit(type) {
+  var er, handler, len, args, i, events, domain;
+  var doError = (type === 'error');
+
+  events = this._events;
+  if (events)
+    doError = (doError && events.error == null);
+  else if (!doError)
+    return false;
+
+  domain = this.domain;
+
+  // If there is no 'error' event listener then throw.
+  if (doError) {
+    er = arguments[1];
+    if (domain) {
+      if (!er)
+        er = new Error('Uncaught, unspecified "error" event');
+      er.domainEmitter = this;
+      er.domain = domain;
+      er.domainThrown = false;
+      domain.emit('error', er);
+    } else if (er instanceof Error) {
+      throw er; // Unhandled 'error' event
+    } else {
+      // At least give some kind of context to the user
+      var err = new Error('Uncaught, unspecified "error" event. (' + er + ')');
+      err.context = er;
+      throw err;
+    }
+    return false;
+  }
+
+  handler = events[type];
+
+  if (!handler)
+    return false;
+
+  var isFn = typeof handler === 'function';
+  len = arguments.length;
+  switch (len) {
+    // fast cases
+    case 1:
+      emitNone(handler, isFn, this);
+      break;
+    case 2:
+      emitOne(handler, isFn, this, arguments[1]);
+      break;
+    case 3:
+      emitTwo(handler, isFn, this, arguments[1], arguments[2]);
+      break;
+    case 4:
+      emitThree(handler, isFn, this, arguments[1], arguments[2], arguments[3]);
+      break;
+    // slower
+    default:
+      args = new Array(len - 1);
+      for (i = 1; i < len; i++)
+        args[i - 1] = arguments[i];
+      emitMany(handler, isFn, this, args);
   }
 
   return true;
@@ -2263,18 +2312,17 @@ function _addListener(target, type, listener, prepend) {
   var events;
   var existing;
 
-  if (typeof listener !== 'function') {
-    throw new TypeError('The "listener" argument must be of type Function. Received type ' + typeof listener);
-  }
+  if (typeof listener !== 'function')
+    throw new TypeError('"listener" argument must be a function');
 
   events = target._events;
-  if (events === undefined) {
-    events = target._events = Object.create(null);
+  if (!events) {
+    events = target._events = new EventHandlers();
     target._eventsCount = 0;
   } else {
     // To avoid recursion in the case that type === "newListener"! Before
     // adding it to the listeners, first emit "newListener".
-    if (events.newListener !== undefined) {
+    if (events.newListener) {
       target.emit('newListener', type,
                   listener.listener ? listener.listener : listener);
 
@@ -2285,43 +2333,46 @@ function _addListener(target, type, listener, prepend) {
     existing = events[type];
   }
 
-  if (existing === undefined) {
+  if (!existing) {
     // Optimize the case of one listener. Don't need the extra array object.
     existing = events[type] = listener;
     ++target._eventsCount;
   } else {
     if (typeof existing === 'function') {
       // Adding the second element, need to change to array.
-      existing = events[type] =
-        prepend ? [listener, existing] : [existing, listener];
-      // If we've already got an array, just append.
-    } else if (prepend) {
-      existing.unshift(listener);
+      existing = events[type] = prepend ? [listener, existing] :
+                                          [existing, listener];
     } else {
-      existing.push(listener);
+      // If we've already got an array, just append.
+      if (prepend) {
+        existing.unshift(listener);
+      } else {
+        existing.push(listener);
+      }
     }
 
     // Check for listener leak
-    m = $getMaxListeners(target);
-    if (m > 0 && existing.length > m && !existing.warned) {
-      existing.warned = true;
-      // No error code for this since it is a Warning
-      // eslint-disable-next-line no-restricted-syntax
-      var w = new Error('Possible EventEmitter memory leak detected. ' +
-                          existing.length + ' ' + String(type) + ' listeners ' +
-                          'added. Use emitter.setMaxListeners() to ' +
-                          'increase limit');
-      w.name = 'MaxListenersExceededWarning';
-      w.emitter = target;
-      w.type = type;
-      w.count = existing.length;
-      ProcessEmitWarning(w);
+    if (!existing.warned) {
+      m = $getMaxListeners(target);
+      if (m && m > 0 && existing.length > m) {
+        existing.warned = true;
+        var w = new Error('Possible EventEmitter memory leak detected. ' +
+                            existing.length + ' ' + type + ' listeners added. ' +
+                            'Use emitter.setMaxListeners() to increase limit');
+        w.name = 'MaxListenersExceededWarning';
+        w.emitter = target;
+        w.type = type;
+        w.count = existing.length;
+        emitWarning(w);
+      }
     }
   }
 
   return target;
 }
-
+function emitWarning(e) {
+  typeof console.warn === 'function' ? console.warn(e) : console.log(e);
+}
 EventEmitter$2.prototype.addListener = function addListener(type, listener) {
   return _addListener(this, type, listener, false);
 };
@@ -2333,61 +2384,53 @@ EventEmitter$2.prototype.prependListener =
       return _addListener(this, type, listener, true);
     };
 
-function onceWrapper() {
-  var args = [];
-  for (var i = 0; i < arguments.length; i++) args.push(arguments[i]);
-  if (!this.fired) {
-    this.target.removeListener(this.type, this.wrapFn);
-    this.fired = true;
-    ReflectApply(this.listener, this.target, args);
-  }
-}
-
 function _onceWrap(target, type, listener) {
-  var state = { fired: false, wrapFn: undefined, target: target, type: type, listener: listener };
-  var wrapped = onceWrapper.bind(state);
-  wrapped.listener = listener;
-  state.wrapFn = wrapped;
-  return wrapped;
+  var fired = false;
+  function g() {
+    target.removeListener(type, g);
+    if (!fired) {
+      fired = true;
+      listener.apply(target, arguments);
+    }
+  }
+  g.listener = listener;
+  return g;
 }
 
 EventEmitter$2.prototype.once = function once(type, listener) {
-  if (typeof listener !== 'function') {
-    throw new TypeError('The "listener" argument must be of type Function. Received type ' + typeof listener);
-  }
+  if (typeof listener !== 'function')
+    throw new TypeError('"listener" argument must be a function');
   this.on(type, _onceWrap(this, type, listener));
   return this;
 };
 
 EventEmitter$2.prototype.prependOnceListener =
     function prependOnceListener(type, listener) {
-      if (typeof listener !== 'function') {
-        throw new TypeError('The "listener" argument must be of type Function. Received type ' + typeof listener);
-      }
+      if (typeof listener !== 'function')
+        throw new TypeError('"listener" argument must be a function');
       this.prependListener(type, _onceWrap(this, type, listener));
       return this;
     };
 
-// Emits a 'removeListener' event if and only if the listener was removed.
+// emits a 'removeListener' event iff the listener was removed
 EventEmitter$2.prototype.removeListener =
     function removeListener(type, listener) {
       var list, events, position, i, originalListener;
 
-      if (typeof listener !== 'function') {
-        throw new TypeError('The "listener" argument must be of type Function. Received type ' + typeof listener);
-      }
+      if (typeof listener !== 'function')
+        throw new TypeError('"listener" argument must be a function');
 
       events = this._events;
-      if (events === undefined)
+      if (!events)
         return this;
 
       list = events[type];
-      if (list === undefined)
+      if (!list)
         return this;
 
-      if (list === listener || list.listener === listener) {
+      if (list === listener || (list.listener && list.listener === listener)) {
         if (--this._eventsCount === 0)
-          this._events = Object.create(null);
+          this._events = new EventHandlers();
         else {
           delete events[type];
           if (events.removeListener)
@@ -2396,8 +2439,9 @@ EventEmitter$2.prototype.removeListener =
       } else if (typeof list !== 'function') {
         position = -1;
 
-        for (i = list.length - 1; i >= 0; i--) {
-          if (list[i] === listener || list[i].listener === listener) {
+        for (i = list.length; i-- > 0;) {
+          if (list[i] === listener ||
+              (list[i].listener && list[i].listener === listener)) {
             originalListener = list[i].listener;
             position = i;
             break;
@@ -2407,40 +2451,41 @@ EventEmitter$2.prototype.removeListener =
         if (position < 0)
           return this;
 
-        if (position === 0)
-          list.shift();
-        else {
+        if (list.length === 1) {
+          list[0] = undefined;
+          if (--this._eventsCount === 0) {
+            this._events = new EventHandlers();
+            return this;
+          } else {
+            delete events[type];
+          }
+        } else {
           spliceOne(list, position);
         }
 
-        if (list.length === 1)
-          events[type] = list[0];
-
-        if (events.removeListener !== undefined)
+        if (events.removeListener)
           this.emit('removeListener', type, originalListener || listener);
       }
 
       return this;
     };
 
-EventEmitter$2.prototype.off = EventEmitter$2.prototype.removeListener;
-
 EventEmitter$2.prototype.removeAllListeners =
     function removeAllListeners(type) {
-      var listeners, events, i;
+      var listeners, events;
 
       events = this._events;
-      if (events === undefined)
+      if (!events)
         return this;
 
       // not listening for removeListener, no need to emit
-      if (events.removeListener === undefined) {
+      if (!events.removeListener) {
         if (arguments.length === 0) {
-          this._events = Object.create(null);
+          this._events = new EventHandlers();
           this._eventsCount = 0;
-        } else if (events[type] !== undefined) {
+        } else if (events[type]) {
           if (--this._eventsCount === 0)
-            this._events = Object.create(null);
+            this._events = new EventHandlers();
           else
             delete events[type];
         }
@@ -2450,14 +2495,13 @@ EventEmitter$2.prototype.removeAllListeners =
       // emit removeListener for all listeners on all events
       if (arguments.length === 0) {
         var keys = Object.keys(events);
-        var key;
-        for (i = 0; i < keys.length; ++i) {
+        for (var i = 0, key; i < keys.length; ++i) {
           key = keys[i];
           if (key === 'removeListener') continue;
           this.removeAllListeners(key);
         }
         this.removeAllListeners('removeListener');
-        this._events = Object.create(null);
+        this._events = new EventHandlers();
         this._eventsCount = 0;
         return this;
       }
@@ -2466,39 +2510,34 @@ EventEmitter$2.prototype.removeAllListeners =
 
       if (typeof listeners === 'function') {
         this.removeListener(type, listeners);
-      } else if (listeners !== undefined) {
+      } else if (listeners) {
         // LIFO order
-        for (i = listeners.length - 1; i >= 0; i--) {
-          this.removeListener(type, listeners[i]);
-        }
+        do {
+          this.removeListener(type, listeners[listeners.length - 1]);
+        } while (listeners[0]);
       }
 
       return this;
     };
 
-function _listeners(target, type, unwrap) {
-  var events = target._events;
-
-  if (events === undefined)
-    return [];
-
-  var evlistener = events[type];
-  if (evlistener === undefined)
-    return [];
-
-  if (typeof evlistener === 'function')
-    return unwrap ? [evlistener.listener || evlistener] : [evlistener];
-
-  return unwrap ?
-    unwrapListeners(evlistener) : arrayClone(evlistener, evlistener.length);
-}
-
 EventEmitter$2.prototype.listeners = function listeners(type) {
-  return _listeners(this, type, true);
-};
+  var evlistener;
+  var ret;
+  var events = this._events;
 
-EventEmitter$2.prototype.rawListeners = function rawListeners(type) {
-  return _listeners(this, type, false);
+  if (!events)
+    ret = [];
+  else {
+    evlistener = events[type];
+    if (!evlistener)
+      ret = [];
+    else if (typeof evlistener === 'function')
+      ret = [evlistener.listener || evlistener];
+    else
+      ret = unwrapListeners(evlistener);
+  }
+
+  return ret;
 };
 
 EventEmitter$2.listenerCount = function(emitter, type) {
@@ -2513,12 +2552,12 @@ EventEmitter$2.prototype.listenerCount = listenerCount$1;
 function listenerCount$1(type) {
   var events = this._events;
 
-  if (events !== undefined) {
+  if (events) {
     var evlistener = events[type];
 
     if (typeof evlistener === 'function') {
       return 1;
-    } else if (evlistener !== undefined) {
+    } else if (evlistener) {
       return evlistener.length;
     }
   }
@@ -2527,20 +2566,21 @@ function listenerCount$1(type) {
 }
 
 EventEmitter$2.prototype.eventNames = function eventNames() {
-  return this._eventsCount > 0 ? ReflectOwnKeys(this._events) : [];
+  return this._eventsCount > 0 ? Reflect.ownKeys(this._events) : [];
 };
 
-function arrayClone(arr, n) {
-  var copy = new Array(n);
-  for (var i = 0; i < n; ++i)
-    copy[i] = arr[i];
-  return copy;
+// About 1.5x faster than the two-arg version of Array#splice().
+function spliceOne(list, index) {
+  for (var i = index, k = i + 1, n = list.length; k < n; i += 1, k += 1)
+    list[i] = list[k];
+  list.pop();
 }
 
-function spliceOne(list, index) {
-  for (; index + 1 < list.length; index++)
-    list[index] = list[index + 1];
-  list.pop();
+function arrayClone(arr, i) {
+  var copy = new Array(i);
+  while (i--)
+    copy[i] = arr[i];
+  return copy;
 }
 
 function unwrapListeners(arr) {
@@ -2550,6 +2590,12 @@ function unwrapListeners(arr) {
   }
   return ret;
 }
+
+var events = /*#__PURE__*/Object.freeze({
+  __proto__: null,
+  'default': EventEmitter$2,
+  EventEmitter: EventEmitter$2
+});
 
 // shim for using process in browser
 // based off https://github.com/defunctzombie/node-process/blob/master/browser.js
@@ -5683,7 +5729,7 @@ function simpleEnd(buf) {
 Readable.ReadableState = ReadableState;
 
 var debug = debuglog('stream');
-inherits$1(Readable, events);
+inherits$1(Readable, EventEmitter$2);
 
 function prependListener(emitter, event, fn) {
   // Sadly this is not cacheable as some libraries bundle their own
@@ -5783,7 +5829,7 @@ function Readable(options) {
 
   if (options && typeof options.read === 'function') this._read = options.read;
 
-  events.call(this);
+  EventEmitter$2.call(this);
 }
 
 // Manually shove something into the read() buffer.
@@ -6291,7 +6337,7 @@ Readable.prototype.unpipe = function (dest) {
 // set up data events if they are asked for
 // Ensure readable listeners eventually get something
 Readable.prototype.on = function (ev, fn) {
-  var res = events.prototype.on.call(this, ev, fn);
+  var res = EventEmitter$2.prototype.on.call(this, ev, fn);
 
   if (ev === 'data') {
     // Start flowing on next tick if stream isn't explicitly paused
@@ -6569,7 +6615,7 @@ function indexOf(xs, x) {
 
 // A bit simpler than readable streams.
 Writable$1.WritableState = WritableState;
-inherits$1(Writable$1, events.EventEmitter);
+inherits$1(Writable$1, EventEmitter$2);
 
 function nop() {}
 
@@ -6704,7 +6750,7 @@ function Writable$1(options) {
     if (typeof options.writev === 'function') this._writev = options.writev;
   }
 
-  events.EventEmitter.call(this);
+  EventEmitter$2.call(this);
 }
 
 // Otherwise people can pipe Writable streams, which is just wrong.
@@ -7217,7 +7263,7 @@ PassThrough.prototype._transform = function (chunk, encoding, cb) {
   cb(null, chunk);
 };
 
-inherits$1(Stream, events);
+inherits$1(Stream, EventEmitter$2);
 Stream.Readable = Readable;
 Stream.Writable = Writable$1;
 Stream.Duplex = Duplex$1;
@@ -7231,7 +7277,7 @@ Stream.Stream = Stream;
 // part of this class) is overridden in the Readable class.
 
 function Stream() {
-  events.call(this);
+  EventEmitter$2.call(this);
 }
 
 Stream.prototype.pipe = function(dest, options) {
@@ -7281,7 +7327,7 @@ Stream.prototype.pipe = function(dest, options) {
   // don't leave dangling pipes when there are errors.
   function onerror(er) {
     cleanup();
-    if (events.listenerCount(this, 'error') === 0) {
+    if (EventEmitter$2.listenerCount(this, 'error') === 0) {
       throw er; // Unhandled stream error in pipe.
     }
   }
@@ -7328,7 +7374,7 @@ var stream$1 = /*#__PURE__*/Object.freeze({
   Stream: Stream
 });
 
-var require$$0$2 = /*@__PURE__*/getAugmentedNamespace(stream$1);
+var require$$0$3 = /*@__PURE__*/getAugmentedNamespace(stream$1);
 
 (function (exports) {
 	var crypto = require$$2;
@@ -7407,7 +7453,7 @@ var require$$0$2 = /*@__PURE__*/getAugmentedNamespace(stream$1);
 	};
 
 	// read a bytestream for a packet, decode the header and pass body through
-	var Transform = require$$0$2.Transform;
+	var Transform = require$$0$3.Transform;
 	exports.stream = function(cbHead){
 	  var stream = new Transform();
 	  var buf = new Buffer$2(0);
@@ -7435,7 +7481,7 @@ var require$$0$2 = /*@__PURE__*/getAugmentedNamespace(stream$1);
 	};
 
 	// chunking stream
-	var Duplex = require$$0$2.Duplex;
+	var Duplex = require$$0$3.Duplex;
 	exports.chunking = function(args, cbPacket){
 	  if(!args) args = {};
 	  if(!cbPacket) cbPacket = function(err, packet){ };
@@ -8541,6 +8587,8 @@ var process = {
 
 var WSClient$1 = {};
 
+var require$$0$2 = /*@__PURE__*/getAugmentedNamespace(events);
+
 var hasFetch = isFunction(global$1.fetch) && isFunction(global$1.ReadableStream);
 
 var _blobConstructor;
@@ -9060,32 +9108,35 @@ ClientRequest.prototype.setTimeout = function() {};
 ClientRequest.prototype.setNoDelay = function() {};
 ClientRequest.prototype.setSocketKeepAlive = function() {};
 
+/*! https://mths.be/punycode v1.4.1 by @mathias */
+
+
 /** Highest positive signed 32-bit float value */
-const maxInt = 2147483647; // aka. 0x7FFFFFFF or 2^31-1
+var maxInt = 2147483647; // aka. 0x7FFFFFFF or 2^31-1
 
 /** Bootstring parameters */
-const base = 36;
-const tMin = 1;
-const tMax = 26;
-const skew = 38;
-const damp = 700;
-const initialBias = 72;
-const initialN = 128; // 0x80
-const delimiter$1 = '-'; // '\x2D'
-const regexNonASCII = /[^\0-\x7E]/; // non-ASCII chars
-const regexSeparators = /[\x2E\u3002\uFF0E\uFF61]/g; // RFC 3490 separators
+var base = 36;
+var tMin = 1;
+var tMax = 26;
+var skew = 38;
+var damp = 700;
+var initialBias = 72;
+var initialN = 128; // 0x80
+var delimiter$1 = '-'; // '\x2D'
+var regexNonASCII = /[^\x20-\x7E]/; // unprintable ASCII chars + non-ASCII chars
+var regexSeparators = /[\x2E\u3002\uFF0E\uFF61]/g; // RFC 3490 separators
 
 /** Error messages */
-const errors = {
-	'overflow': 'Overflow: input needs wider integers to process',
-	'not-basic': 'Illegal input >= 0x80 (not a basic code point)',
-	'invalid-input': 'Invalid input'
+var errors = {
+  'overflow': 'Overflow: input needs wider integers to process',
+  'not-basic': 'Illegal input >= 0x80 (not a basic code point)',
+  'invalid-input': 'Invalid input'
 };
 
 /** Convenience shortcuts */
-const baseMinusTMin = base - tMin;
-const floor = Math.floor;
-const stringFromCharCode = String.fromCharCode;
+var baseMinusTMin = base - tMin;
+var floor = Math.floor;
+var stringFromCharCode = String.fromCharCode;
 
 /*--------------------------------------------------------------------------*/
 
@@ -9096,7 +9147,7 @@ const stringFromCharCode = String.fromCharCode;
  * @returns {Error} Throws a `RangeError` with the applicable error message.
  */
 function error$1(type) {
-	throw new RangeError(errors[type]);
+  throw new RangeError(errors[type]);
 }
 
 /**
@@ -9108,12 +9159,12 @@ function error$1(type) {
  * @returns {Array} A new array of values returned by the callback function.
  */
 function map$1(array, fn) {
-	const result = [];
-	let length = array.length;
-	while (length--) {
-		result[length] = fn(array[length]);
-	}
-	return result;
+  var length = array.length;
+  var result = [];
+  while (length--) {
+    result[length] = fn(array[length]);
+  }
+  return result;
 }
 
 /**
@@ -9127,19 +9178,19 @@ function map$1(array, fn) {
  * function.
  */
 function mapDomain(string, fn) {
-	const parts = string.split('@');
-	let result = '';
-	if (parts.length > 1) {
-		// In email addresses, only the domain name should be punycoded. Leave
-		// the local part (i.e. everything up to `@`) intact.
-		result = parts[0] + '@';
-		string = parts[1];
-	}
-	// Avoid `split(regex)` for IE8 compatibility. See #17.
-	string = string.replace(regexSeparators, '\x2E');
-	const labels = string.split('.');
-	const encoded = map$1(labels, fn).join('.');
-	return result + encoded;
+  var parts = string.split('@');
+  var result = '';
+  if (parts.length > 1) {
+    // In email addresses, only the domain name should be punycoded. Leave
+    // the local part (i.e. everything up to `@`) intact.
+    result = parts[0] + '@';
+    string = parts[1];
+  }
+  // Avoid `split(regex)` for IE8 compatibility. See #17.
+  string = string.replace(regexSeparators, '\x2E');
+  var labels = string.split('.');
+  var encoded = map$1(labels, fn).join('.');
+  return result + encoded;
 }
 
 /**
@@ -9156,27 +9207,29 @@ function mapDomain(string, fn) {
  * @returns {Array} The new array of code points.
  */
 function ucs2decode(string) {
-	const output = [];
-	let counter = 0;
-	const length = string.length;
-	while (counter < length) {
-		const value = string.charCodeAt(counter++);
-		if (value >= 0xD800 && value <= 0xDBFF && counter < length) {
-			// It's a high surrogate, and there is a next character.
-			const extra = string.charCodeAt(counter++);
-			if ((extra & 0xFC00) == 0xDC00) { // Low surrogate.
-				output.push(((value & 0x3FF) << 10) + (extra & 0x3FF) + 0x10000);
-			} else {
-				// It's an unmatched surrogate; only append this code unit, in case the
-				// next code unit is the high surrogate of a surrogate pair.
-				output.push(value);
-				counter--;
-			}
-		} else {
-			output.push(value);
-		}
-	}
-	return output;
+  var output = [],
+    counter = 0,
+    length = string.length,
+    value,
+    extra;
+  while (counter < length) {
+    value = string.charCodeAt(counter++);
+    if (value >= 0xD800 && value <= 0xDBFF && counter < length) {
+      // high surrogate, and there is a next character
+      extra = string.charCodeAt(counter++);
+      if ((extra & 0xFC00) == 0xDC00) { // low surrogate
+        output.push(((value & 0x3FF) << 10) + (extra & 0x3FF) + 0x10000);
+      } else {
+        // unmatched surrogate; only append this code unit, in case the next
+        // code unit is the high surrogate of a surrogate pair
+        output.push(value);
+        counter--;
+      }
+    } else {
+      output.push(value);
+    }
+  }
+  return output;
 }
 
 /**
@@ -9190,26 +9243,26 @@ function ucs2decode(string) {
  * used; else, the lowercase form is used. The behavior is undefined
  * if `flag` is non-zero and `digit` has no uppercase form.
  */
-const digitToBasic = function(digit, flag) {
-	//  0..25 map to ASCII a..z or A..Z
-	// 26..35 map to ASCII 0..9
-	return digit + 22 + 75 * (digit < 26) - ((flag != 0) << 5);
-};
+function digitToBasic(digit, flag) {
+  //  0..25 map to ASCII a..z or A..Z
+  // 26..35 map to ASCII 0..9
+  return digit + 22 + 75 * (digit < 26) - ((flag != 0) << 5);
+}
 
 /**
  * Bias adaptation function as per section 3.4 of RFC 3492.
  * https://tools.ietf.org/html/rfc3492#section-3.4
  * @private
  */
-const adapt = function(delta, numPoints, firstTime) {
-	let k = 0;
-	delta = firstTime ? floor(delta / damp) : delta >> 1;
-	delta += floor(delta / numPoints);
-	for (/* no initialization */; delta > baseMinusTMin * tMax >> 1; k += base) {
-		delta = floor(delta / baseMinusTMin);
-	}
-	return floor(k + (baseMinusTMin + 1) * delta / (delta + skew));
-};
+function adapt(delta, numPoints, firstTime) {
+  var k = 0;
+  delta = firstTime ? floor(delta / damp) : delta >> 1;
+  delta += floor(delta / numPoints);
+  for ( /* no initialization */ ; delta > baseMinusTMin * tMax >> 1; k += base) {
+    delta = floor(delta / baseMinusTMin);
+  }
+  return floor(k + (baseMinusTMin + 1) * delta / (delta + skew));
+}
 
 /**
  * Converts a string of Unicode symbols (e.g. a domain name label) to a
@@ -9218,93 +9271,112 @@ const adapt = function(delta, numPoints, firstTime) {
  * @param {String} input The string of Unicode symbols.
  * @returns {String} The resulting Punycode string of ASCII-only symbols.
  */
-const encode = function(input) {
-	const output = [];
+function encode(input) {
+  var n,
+    delta,
+    handledCPCount,
+    basicLength,
+    bias,
+    j,
+    m,
+    q,
+    k,
+    t,
+    currentValue,
+    output = [],
+    /** `inputLength` will hold the number of code points in `input`. */
+    inputLength,
+    /** Cached calculation results */
+    handledCPCountPlusOne,
+    baseMinusT,
+    qMinusT;
 
-	// Convert the input in UCS-2 to an array of Unicode code points.
-	input = ucs2decode(input);
+  // Convert the input in UCS-2 to Unicode
+  input = ucs2decode(input);
 
-	// Cache the length.
-	let inputLength = input.length;
+  // Cache the length
+  inputLength = input.length;
 
-	// Initialize the state.
-	let n = initialN;
-	let delta = 0;
-	let bias = initialBias;
+  // Initialize the state
+  n = initialN;
+  delta = 0;
+  bias = initialBias;
 
-	// Handle the basic code points.
-	for (const currentValue of input) {
-		if (currentValue < 0x80) {
-			output.push(stringFromCharCode(currentValue));
-		}
-	}
+  // Handle the basic code points
+  for (j = 0; j < inputLength; ++j) {
+    currentValue = input[j];
+    if (currentValue < 0x80) {
+      output.push(stringFromCharCode(currentValue));
+    }
+  }
 
-	let basicLength = output.length;
-	let handledCPCount = basicLength;
+  handledCPCount = basicLength = output.length;
 
-	// `handledCPCount` is the number of code points that have been handled;
-	// `basicLength` is the number of basic code points.
+  // `handledCPCount` is the number of code points that have been handled;
+  // `basicLength` is the number of basic code points.
 
-	// Finish the basic string with a delimiter unless it's empty.
-	if (basicLength) {
-		output.push(delimiter$1);
-	}
+  // Finish the basic string - if it is not empty - with a delimiter
+  if (basicLength) {
+    output.push(delimiter$1);
+  }
 
-	// Main encoding loop:
-	while (handledCPCount < inputLength) {
+  // Main encoding loop:
+  while (handledCPCount < inputLength) {
 
-		// All non-basic code points < n have been handled already. Find the next
-		// larger one:
-		let m = maxInt;
-		for (const currentValue of input) {
-			if (currentValue >= n && currentValue < m) {
-				m = currentValue;
-			}
-		}
+    // All non-basic code points < n have been handled already. Find the next
+    // larger one:
+    for (m = maxInt, j = 0; j < inputLength; ++j) {
+      currentValue = input[j];
+      if (currentValue >= n && currentValue < m) {
+        m = currentValue;
+      }
+    }
 
-		// Increase `delta` enough to advance the decoder's <n,i> state to <m,0>,
-		// but guard against overflow.
-		const handledCPCountPlusOne = handledCPCount + 1;
-		if (m - n > floor((maxInt - delta) / handledCPCountPlusOne)) {
-			error$1('overflow');
-		}
+    // Increase `delta` enough to advance the decoder's <n,i> state to <m,0>,
+    // but guard against overflow
+    handledCPCountPlusOne = handledCPCount + 1;
+    if (m - n > floor((maxInt - delta) / handledCPCountPlusOne)) {
+      error$1('overflow');
+    }
 
-		delta += (m - n) * handledCPCountPlusOne;
-		n = m;
+    delta += (m - n) * handledCPCountPlusOne;
+    n = m;
 
-		for (const currentValue of input) {
-			if (currentValue < n && ++delta > maxInt) {
-				error$1('overflow');
-			}
-			if (currentValue == n) {
-				// Represent delta as a generalized variable-length integer.
-				let q = delta;
-				for (let k = base; /* no condition */; k += base) {
-					const t = k <= bias ? tMin : (k >= bias + tMax ? tMax : k - bias);
-					if (q < t) {
-						break;
-					}
-					const qMinusT = q - t;
-					const baseMinusT = base - t;
-					output.push(
-						stringFromCharCode(digitToBasic(t + qMinusT % baseMinusT, 0))
-					);
-					q = floor(qMinusT / baseMinusT);
-				}
+    for (j = 0; j < inputLength; ++j) {
+      currentValue = input[j];
 
-				output.push(stringFromCharCode(digitToBasic(q, 0)));
-				bias = adapt(delta, handledCPCountPlusOne, handledCPCount == basicLength);
-				delta = 0;
-				++handledCPCount;
-			}
-		}
+      if (currentValue < n && ++delta > maxInt) {
+        error$1('overflow');
+      }
 
-		++delta;
-		++n;
+      if (currentValue == n) {
+        // Represent delta as a generalized variable-length integer
+        for (q = delta, k = base; /* no condition */ ; k += base) {
+          t = k <= bias ? tMin : (k >= bias + tMax ? tMax : k - bias);
+          if (q < t) {
+            break;
+          }
+          qMinusT = q - t;
+          baseMinusT = base - t;
+          output.push(
+            stringFromCharCode(digitToBasic(t + qMinusT % baseMinusT, 0))
+          );
+          q = floor(qMinusT / baseMinusT);
+        }
 
-	}
-	return output.join('');
-};
+        output.push(stringFromCharCode(digitToBasic(q, 0)));
+        bias = adapt(delta, handledCPCountPlusOne, handledCPCount == basicLength);
+        delta = 0;
+        ++handledCPCount;
+      }
+    }
+
+    ++delta;
+    ++n;
+
+  }
+  return output.join('');
+}
 
 /**
  * Converts a Unicode string representing a domain name or an email address to
@@ -9317,13 +9389,13 @@ const encode = function(input) {
  * @returns {String} The Punycode representation of the given domain name or
  * email address.
  */
-const toASCII = function(input) {
-	return mapDomain(input, function(string) {
-		return regexNonASCII.test(string)
-			? 'xn--' + encode(string)
-			: string;
-	});
-};
+function toASCII(input) {
+  return mapDomain(input, function(string) {
+    return regexNonASCII.test(string) ?
+      'xn--' + encode(string) :
+      string;
+  });
+}
 
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -17435,7 +17507,7 @@ if (!process.env.WS_NO_UTF_8_VALIDATE) {
   }
 }
 
-const { Writable } = require$$0$2;
+const { Writable } = require$$0$3;
 
 const PerMessageDeflate$3 = permessageDeflate;
 const {
@@ -18992,7 +19064,7 @@ function format$1(extensions) {
 
 var extension$1 = { format: format$1, parse: parse$2 };
 
-const EventEmitter$1 = events;
+const EventEmitter$1 = require$$0$2;
 const https$1 = require$$4;
 const http$2 = require$$4;
 const net = require$$2;
@@ -20293,7 +20365,7 @@ function socketOnError$1() {
   }
 }
 
-const { Duplex } = require$$0$2;
+const { Duplex } = require$$0$3;
 
 /**
  * Emits the `'close'` event on a stream.
@@ -20512,7 +20584,7 @@ function parse(header) {
 
 var subprotocol$1 = { parse };
 
-const EventEmitter = events;
+const EventEmitter = require$$0$2;
 const http$1 = require$$4;
 const { createHash } = require$$2;
 
@@ -21746,7 +21818,7 @@ var Crypto = {};
 
 var libsodiumWrappers = {};
 
-var __dirname = '/home/ryan/work/herakles/lib/node_modules/libsodium/dist/modules';
+var __dirname = '/Users/ryanbennett/work/herakles/lib/node_modules/libsodium/dist/modules';
 
 var libsodium = {exports: {}};
 
@@ -23582,7 +23654,7 @@ class PocketClient {
     if (pathParts[0] === "harnessed") {
       _reqInit.headers["X-Intercepted-Subdomain"] = pathParts[1];
       this.subdomain = pathParts[1];
-    } else if (this.subdomain) {
+    } else if (this.subdomain && url.pathname !== '/manifest.json') {
       _reqInit.headers["X-Intercepted-Subdomain"] = this.subdomain;
     }
 
