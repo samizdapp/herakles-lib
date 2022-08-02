@@ -264,6 +264,16 @@ export default class PocketClient {
   }
 
   patchFetchArgs(_reqObj, _reqInit) {
+    if (typeof reqObj === "string" && reqObj.startsWith("http")) {
+      const url = new URL(reqObj);
+      reqInit.headers = reqInit.headers || {};
+      reqInit.headers["X-Intercepted-Subdomain"] = url.hostname;
+      url.host = "localhost";
+      url.protocol = "http:";
+      url.port = "80";
+      reqObj = url.toString();
+      return {reqObj, reqInit}
+    }
     // if (typeof _reqObj === "string" && _reqObj.startsWith("http")) {
     console.log("patch");
     const url = new URL(_reqObj.url);
