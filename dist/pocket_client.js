@@ -23701,6 +23701,10 @@ class PocketClient {
       const reqInit = _reqInit;
       const url = new URL(reqObj);
       reqInit.headers = reqInit.headers || {};
+      for (var pair of reqInit.headers.entries()) {
+        reqInit.headers[pair[0]] = pair[1];
+        console.log(pair[0] + ": " + pair[1]);
+      }
       reqInit.headers["X-Intercepted-Subdomain"] = url.hostname;
       url.host = "localhost";
       url.protocol = "http:";

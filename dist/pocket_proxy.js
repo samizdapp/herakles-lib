@@ -161,6 +161,7 @@ class PocketProxy {
       init = reqObj;
     }
 
+    console.log('do fetch', url, init);
     fres = await fetch__default["default"](url, init);
     const resb = await fres.arrayBuffer();
     const res = getResponseJSON(fres);

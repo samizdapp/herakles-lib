@@ -4497,13 +4497,13 @@ function requireMinimal () {
 
 var writer = Writer$1;
 
-var util$8      = requireMinimal();
+var util$7      = requireMinimal();
 
 var BufferWriter$1; // cyclic
 
-var LongBits$1  = util$8.LongBits,
-    base64    = util$8.base64,
-    utf8$1      = util$8.utf8;
+var LongBits$1  = util$7.LongBits,
+    base64    = util$7.base64,
+    utf8$1      = util$7.utf8;
 
 /**
  * Constructs a new writer operation instance.
@@ -4618,7 +4618,7 @@ function Writer$1() {
 }
 
 var create$1 = function create() {
-    return util$8.Buffer
+    return util$7.Buffer
         ? function create_buffer_setup() {
             return (Writer$1.create = function create_buffer() {
                 return new BufferWriter$1();
@@ -4643,13 +4643,13 @@ Writer$1.create = create$1();
  * @returns {Uint8Array} Buffer
  */
 Writer$1.alloc = function alloc(size) {
-    return new util$8.Array(size);
+    return new util$7.Array(size);
 };
 
 // Use Uint8Array buffer pool in the browser, just like node does with buffers
 /* istanbul ignore else */
-if (util$8.Array !== Array)
-    Writer$1.alloc = util$8.pool(Writer$1.alloc, util$8.Array.prototype.subarray);
+if (util$7.Array !== Array)
+    Writer$1.alloc = util$7.pool(Writer$1.alloc, util$7.Array.prototype.subarray);
 
 /**
  * Pushes a new operation to the queue.
@@ -4839,7 +4839,7 @@ Writer$1.prototype.sfixed64 = Writer$1.prototype.fixed64;
  * @returns {Writer} `this`
  */
 Writer$1.prototype.float = function write_float(value) {
-    return this._push(util$8.float.writeFloatLE, 4, value);
+    return this._push(util$7.float.writeFloatLE, 4, value);
 };
 
 /**
@@ -4849,10 +4849,10 @@ Writer$1.prototype.float = function write_float(value) {
  * @returns {Writer} `this`
  */
 Writer$1.prototype.double = function write_double(value) {
-    return this._push(util$8.float.writeDoubleLE, 8, value);
+    return this._push(util$7.float.writeDoubleLE, 8, value);
 };
 
-var writeBytes = util$8.Array.prototype.set
+var writeBytes = util$7.Array.prototype.set
     ? function writeBytes_set(val, buf, pos) {
         buf.set(val, pos); // also works for plain array values
     }
@@ -4871,7 +4871,7 @@ Writer$1.prototype.bytes = function write_bytes(value) {
     var len = value.length >>> 0;
     if (!len)
         return this._push(writeByte, 1, 0);
-    if (util$8.isString(value)) {
+    if (util$7.isString(value)) {
         var buf = Writer$1.alloc(len = base64.length(value));
         base64.decode(value, buf, 0);
         value = buf;
@@ -4966,7 +4966,7 @@ var writer_buffer = BufferWriter;
 var Writer = writer;
 (BufferWriter.prototype = Object.create(Writer.prototype)).constructor = BufferWriter;
 
-var util$7 = requireMinimal();
+var util$6 = requireMinimal();
 
 /**
  * Constructs a new buffer writer instance.
@@ -4985,9 +4985,9 @@ BufferWriter._configure = function () {
      * @param {number} size Buffer size
      * @returns {Buffer} Buffer
      */
-    BufferWriter.alloc = util$7._Buffer_allocUnsafe;
+    BufferWriter.alloc = util$6._Buffer_allocUnsafe;
 
-    BufferWriter.writeBytesBuffer = util$7.Buffer && util$7.Buffer.prototype instanceof Uint8Array && util$7.Buffer.prototype.set.name === "set"
+    BufferWriter.writeBytesBuffer = util$6.Buffer && util$6.Buffer.prototype instanceof Uint8Array && util$6.Buffer.prototype.set.name === "set"
         ? function writeBytesBuffer_set(val, buf, pos) {
           buf.set(val, pos); // faster than copy (requires node >= 4 where Buffers extend Uint8Array and set is properly inherited)
           // also works for plain array values
@@ -5006,8 +5006,8 @@ BufferWriter._configure = function () {
  * @override
  */
 BufferWriter.prototype.bytes = function write_bytes_buffer(value) {
-    if (util$7.isString(value))
-        value = util$7._Buffer_from(value, "base64");
+    if (util$6.isString(value))
+        value = util$6._Buffer_from(value, "base64");
     var len = value.length >>> 0;
     this.uint32(len);
     if (len)
@@ -5017,7 +5017,7 @@ BufferWriter.prototype.bytes = function write_bytes_buffer(value) {
 
 function writeStringBuffer(val, buf, pos) {
     if (val.length < 40) // plain js is faster for short strings (probably due to redundant assertions)
-        util$7.utf8.write(val, buf, pos);
+        util$6.utf8.write(val, buf, pos);
     else if (buf.utf8Write)
         buf.utf8Write(val, pos);
     else
@@ -5028,7 +5028,7 @@ function writeStringBuffer(val, buf, pos) {
  * @override
  */
 BufferWriter.prototype.string = function write_string_buffer(value) {
-    var len = util$7.Buffer.byteLength(value);
+    var len = util$6.Buffer.byteLength(value);
     this.uint32(len);
     if (len)
         this._push(writeStringBuffer, len, value);
@@ -5047,12 +5047,12 @@ BufferWriter._configure();
 
 var reader = Reader$1;
 
-var util$6      = requireMinimal();
+var util$5      = requireMinimal();
 
 var BufferReader$1; // cyclic
 
-var LongBits  = util$6.LongBits,
-    utf8      = util$6.utf8;
+var LongBits  = util$5.LongBits,
+    utf8      = util$5.utf8;
 
 /* istanbul ignore next */
 function indexOutOfRange(reader, writeLength) {
@@ -5100,10 +5100,10 @@ var create_array = typeof Uint8Array !== "undefined"
     };
 
 var create = function create() {
-    return util$6.Buffer
+    return util$5.Buffer
         ? function create_buffer_setup(buffer) {
             return (Reader$1.create = function create_buffer(buffer) {
-                return util$6.Buffer.isBuffer(buffer)
+                return util$5.Buffer.isBuffer(buffer)
                     ? new BufferReader$1(buffer)
                     /* istanbul ignore next */
                     : create_array(buffer);
@@ -5122,7 +5122,7 @@ var create = function create() {
  */
 Reader$1.create = create();
 
-Reader$1.prototype._slice = util$6.Array.prototype.subarray || /* istanbul ignore next */ util$6.Array.prototype.slice;
+Reader$1.prototype._slice = util$5.Array.prototype.subarray || /* istanbul ignore next */ util$5.Array.prototype.slice;
 
 /**
  * Reads a varint as an unsigned 32 bit value.
@@ -5321,7 +5321,7 @@ Reader$1.prototype.float = function read_float() {
     if (this.pos + 4 > this.len)
         throw indexOutOfRange(this, 4);
 
-    var value = util$6.float.readFloatLE(this.buf, this.pos);
+    var value = util$5.float.readFloatLE(this.buf, this.pos);
     this.pos += 4;
     return value;
 };
@@ -5337,7 +5337,7 @@ Reader$1.prototype.double = function read_double() {
     if (this.pos + 8 > this.len)
         throw indexOutOfRange(this, 4);
 
-    var value = util$6.float.readDoubleLE(this.buf, this.pos);
+    var value = util$5.float.readDoubleLE(this.buf, this.pos);
     this.pos += 8;
     return value;
 };
@@ -5430,8 +5430,8 @@ Reader$1._configure = function(BufferReader_) {
     Reader$1.create = create();
     BufferReader$1._configure();
 
-    var fn = util$6.Long ? "toLong" : /* istanbul ignore next */ "toNumber";
-    util$6.merge(Reader$1.prototype, {
+    var fn = util$5.Long ? "toLong" : /* istanbul ignore next */ "toNumber";
+    util$5.merge(Reader$1.prototype, {
 
         int64: function read_int64() {
             return readLongVarint.call(this)[fn](false);
@@ -5462,7 +5462,7 @@ var reader_buffer = BufferReader;
 var Reader = reader;
 (BufferReader.prototype = Object.create(Reader.prototype)).constructor = BufferReader;
 
-var util$5 = requireMinimal();
+var util$4 = requireMinimal();
 
 /**
  * Constructs a new buffer reader instance.
@@ -5483,8 +5483,8 @@ function BufferReader(buffer) {
 
 BufferReader._configure = function () {
     /* istanbul ignore else */
-    if (util$5.Buffer)
-        BufferReader.prototype._slice = util$5.Buffer.prototype.slice;
+    if (util$4.Buffer)
+        BufferReader.prototype._slice = util$4.Buffer.prototype.slice;
 };
 
 
@@ -5511,10 +5511,10 @@ var rpc = {};
 
 var service$1 = Service$1;
 
-var util$4 = requireMinimal();
+var util$3 = requireMinimal();
 
 // Extends EventEmitter
-(Service$1.prototype = Object.create(util$4.EventEmitter.prototype)).constructor = Service$1;
+(Service$1.prototype = Object.create(util$3.EventEmitter.prototype)).constructor = Service$1;
 
 /**
  * A service method callback as used by {@link rpc.ServiceMethod|ServiceMethod}.
@@ -5554,7 +5554,7 @@ function Service$1(rpcImpl, requestDelimited, responseDelimited) {
     if (typeof rpcImpl !== "function")
         throw TypeError("rpcImpl must be a function");
 
-    util$4.EventEmitter.call(this);
+    util$3.EventEmitter.call(this);
 
     /**
      * RPC implementation. Becomes `null` once the service is ended.
@@ -5593,7 +5593,7 @@ Service$1.prototype.rpcCall = function rpcCall(method, requestCtor, responseCtor
 
     var self = this;
     if (!callback)
-        return util$4.asPromise(rpcCall, self, method, requestCtor, responseCtor, request);
+        return util$3.asPromise(rpcCall, self, method, requestCtor, responseCtor, request);
 
     if (!self.rpcImpl) {
         setTimeout(function() { callback(Error("already ended")); }, 0);
@@ -5729,7 +5729,7 @@ var roots = {};
 	configure();
 } (indexMinimal));
 
-var util$3 = {exports: {}};
+var util$2 = {exports: {}};
 
 var codegen_1;
 var hasRequiredCodegen;
@@ -7758,7 +7758,7 @@ function requireService () {
 
 var message = Message;
 
-var util$2 = requireMinimal();
+var util$1 = requireMinimal();
 
 /**
  * Constructs a new message instance.
@@ -7890,7 +7890,7 @@ Message.toObject = function toObject(message, options) {
  * @returns {Object.<string,*>} JSON object
  */
 Message.prototype.toJSON = function toJSON() {
-    return this.$type.toObject(this, util$2.toJSONOptions);
+    return this.$type.toObject(this, util$1.toJSONOptions);
 };
 
 var decoder_1;
@@ -8029,181 +8029,189 @@ function requireDecoder () {
 	return decoder_1;
 }
 
-var verifier_1 = verifier;
+var verifier_1;
+var hasRequiredVerifier;
 
-var Enum$1      = require_enum(),
-    util$1      = requireUtil();
+function requireVerifier () {
+	if (hasRequiredVerifier) return verifier_1;
+	hasRequiredVerifier = 1;
+	verifier_1 = verifier;
 
-function invalid(field, expected) {
-    return field.name + ": " + expected + (field.repeated && expected !== "array" ? "[]" : field.map && expected !== "object" ? "{k:"+field.keyType+"}" : "") + " expected";
-}
+	var Enum      = require_enum(),
+	    util      = requireUtil();
 
-/**
- * Generates a partial value verifier.
- * @param {Codegen} gen Codegen instance
- * @param {Field} field Reflected field
- * @param {number} fieldIndex Field index
- * @param {string} ref Variable reference
- * @returns {Codegen} Codegen instance
- * @ignore
- */
-function genVerifyValue(gen, field, fieldIndex, ref) {
-    /* eslint-disable no-unexpected-multiline */
-    if (field.resolvedType) {
-        if (field.resolvedType instanceof Enum$1) { gen
-            ("switch(%s){", ref)
-                ("default:")
-                    ("return%j", invalid(field, "enum value"));
-            for (var keys = Object.keys(field.resolvedType.values), j = 0; j < keys.length; ++j) gen
-                ("case %i:", field.resolvedType.values[keys[j]]);
-            gen
-                    ("break")
-            ("}");
-        } else {
-            gen
-            ("{")
-                ("var e=types[%i].verify(%s);", fieldIndex, ref)
-                ("if(e)")
-                    ("return%j+e", field.name + ".")
-            ("}");
-        }
-    } else {
-        switch (field.type) {
-            case "int32":
-            case "uint32":
-            case "sint32":
-            case "fixed32":
-            case "sfixed32": gen
-                ("if(!util.isInteger(%s))", ref)
-                    ("return%j", invalid(field, "integer"));
-                break;
-            case "int64":
-            case "uint64":
-            case "sint64":
-            case "fixed64":
-            case "sfixed64": gen
-                ("if(!util.isInteger(%s)&&!(%s&&util.isInteger(%s.low)&&util.isInteger(%s.high)))", ref, ref, ref, ref)
-                    ("return%j", invalid(field, "integer|Long"));
-                break;
-            case "float":
-            case "double": gen
-                ("if(typeof %s!==\"number\")", ref)
-                    ("return%j", invalid(field, "number"));
-                break;
-            case "bool": gen
-                ("if(typeof %s!==\"boolean\")", ref)
-                    ("return%j", invalid(field, "boolean"));
-                break;
-            case "string": gen
-                ("if(!util.isString(%s))", ref)
-                    ("return%j", invalid(field, "string"));
-                break;
-            case "bytes": gen
-                ("if(!(%s&&typeof %s.length===\"number\"||util.isString(%s)))", ref, ref, ref)
-                    ("return%j", invalid(field, "buffer"));
-                break;
-        }
-    }
-    return gen;
-    /* eslint-enable no-unexpected-multiline */
-}
+	function invalid(field, expected) {
+	    return field.name + ": " + expected + (field.repeated && expected !== "array" ? "[]" : field.map && expected !== "object" ? "{k:"+field.keyType+"}" : "") + " expected";
+	}
 
-/**
- * Generates a partial key verifier.
- * @param {Codegen} gen Codegen instance
- * @param {Field} field Reflected field
- * @param {string} ref Variable reference
- * @returns {Codegen} Codegen instance
- * @ignore
- */
-function genVerifyKey(gen, field, ref) {
-    /* eslint-disable no-unexpected-multiline */
-    switch (field.keyType) {
-        case "int32":
-        case "uint32":
-        case "sint32":
-        case "fixed32":
-        case "sfixed32": gen
-            ("if(!util.key32Re.test(%s))", ref)
-                ("return%j", invalid(field, "integer key"));
-            break;
-        case "int64":
-        case "uint64":
-        case "sint64":
-        case "fixed64":
-        case "sfixed64": gen
-            ("if(!util.key64Re.test(%s))", ref) // see comment above: x is ok, d is not
-                ("return%j", invalid(field, "integer|Long key"));
-            break;
-        case "bool": gen
-            ("if(!util.key2Re.test(%s))", ref)
-                ("return%j", invalid(field, "boolean key"));
-            break;
-    }
-    return gen;
-    /* eslint-enable no-unexpected-multiline */
-}
+	/**
+	 * Generates a partial value verifier.
+	 * @param {Codegen} gen Codegen instance
+	 * @param {Field} field Reflected field
+	 * @param {number} fieldIndex Field index
+	 * @param {string} ref Variable reference
+	 * @returns {Codegen} Codegen instance
+	 * @ignore
+	 */
+	function genVerifyValue(gen, field, fieldIndex, ref) {
+	    /* eslint-disable no-unexpected-multiline */
+	    if (field.resolvedType) {
+	        if (field.resolvedType instanceof Enum) { gen
+	            ("switch(%s){", ref)
+	                ("default:")
+	                    ("return%j", invalid(field, "enum value"));
+	            for (var keys = Object.keys(field.resolvedType.values), j = 0; j < keys.length; ++j) gen
+	                ("case %i:", field.resolvedType.values[keys[j]]);
+	            gen
+	                    ("break")
+	            ("}");
+	        } else {
+	            gen
+	            ("{")
+	                ("var e=types[%i].verify(%s);", fieldIndex, ref)
+	                ("if(e)")
+	                    ("return%j+e", field.name + ".")
+	            ("}");
+	        }
+	    } else {
+	        switch (field.type) {
+	            case "int32":
+	            case "uint32":
+	            case "sint32":
+	            case "fixed32":
+	            case "sfixed32": gen
+	                ("if(!util.isInteger(%s))", ref)
+	                    ("return%j", invalid(field, "integer"));
+	                break;
+	            case "int64":
+	            case "uint64":
+	            case "sint64":
+	            case "fixed64":
+	            case "sfixed64": gen
+	                ("if(!util.isInteger(%s)&&!(%s&&util.isInteger(%s.low)&&util.isInteger(%s.high)))", ref, ref, ref, ref)
+	                    ("return%j", invalid(field, "integer|Long"));
+	                break;
+	            case "float":
+	            case "double": gen
+	                ("if(typeof %s!==\"number\")", ref)
+	                    ("return%j", invalid(field, "number"));
+	                break;
+	            case "bool": gen
+	                ("if(typeof %s!==\"boolean\")", ref)
+	                    ("return%j", invalid(field, "boolean"));
+	                break;
+	            case "string": gen
+	                ("if(!util.isString(%s))", ref)
+	                    ("return%j", invalid(field, "string"));
+	                break;
+	            case "bytes": gen
+	                ("if(!(%s&&typeof %s.length===\"number\"||util.isString(%s)))", ref, ref, ref)
+	                    ("return%j", invalid(field, "buffer"));
+	                break;
+	        }
+	    }
+	    return gen;
+	    /* eslint-enable no-unexpected-multiline */
+	}
 
-/**
- * Generates a verifier specific to the specified message type.
- * @param {Type} mtype Message type
- * @returns {Codegen} Codegen instance
- */
-function verifier(mtype) {
-    /* eslint-disable no-unexpected-multiline */
+	/**
+	 * Generates a partial key verifier.
+	 * @param {Codegen} gen Codegen instance
+	 * @param {Field} field Reflected field
+	 * @param {string} ref Variable reference
+	 * @returns {Codegen} Codegen instance
+	 * @ignore
+	 */
+	function genVerifyKey(gen, field, ref) {
+	    /* eslint-disable no-unexpected-multiline */
+	    switch (field.keyType) {
+	        case "int32":
+	        case "uint32":
+	        case "sint32":
+	        case "fixed32":
+	        case "sfixed32": gen
+	            ("if(!util.key32Re.test(%s))", ref)
+	                ("return%j", invalid(field, "integer key"));
+	            break;
+	        case "int64":
+	        case "uint64":
+	        case "sint64":
+	        case "fixed64":
+	        case "sfixed64": gen
+	            ("if(!util.key64Re.test(%s))", ref) // see comment above: x is ok, d is not
+	                ("return%j", invalid(field, "integer|Long key"));
+	            break;
+	        case "bool": gen
+	            ("if(!util.key2Re.test(%s))", ref)
+	                ("return%j", invalid(field, "boolean key"));
+	            break;
+	    }
+	    return gen;
+	    /* eslint-enable no-unexpected-multiline */
+	}
 
-    var gen = util$1.codegen(["m"], mtype.name + "$verify")
-    ("if(typeof m!==\"object\"||m===null)")
-        ("return%j", "object expected");
-    var oneofs = mtype.oneofsArray,
-        seenFirstField = {};
-    if (oneofs.length) gen
-    ("var p={}");
+	/**
+	 * Generates a verifier specific to the specified message type.
+	 * @param {Type} mtype Message type
+	 * @returns {Codegen} Codegen instance
+	 */
+	function verifier(mtype) {
+	    /* eslint-disable no-unexpected-multiline */
 
-    for (var i = 0; i < /* initializes */ mtype.fieldsArray.length; ++i) {
-        var field = mtype._fieldsArray[i].resolve(),
-            ref   = "m" + util$1.safeProp(field.name);
+	    var gen = util.codegen(["m"], mtype.name + "$verify")
+	    ("if(typeof m!==\"object\"||m===null)")
+	        ("return%j", "object expected");
+	    var oneofs = mtype.oneofsArray,
+	        seenFirstField = {};
+	    if (oneofs.length) gen
+	    ("var p={}");
 
-        if (field.optional) gen
-        ("if(%s!=null&&m.hasOwnProperty(%j)){", ref, field.name); // !== undefined && !== null
+	    for (var i = 0; i < /* initializes */ mtype.fieldsArray.length; ++i) {
+	        var field = mtype._fieldsArray[i].resolve(),
+	            ref   = "m" + util.safeProp(field.name);
 
-        // map fields
-        if (field.map) { gen
-            ("if(!util.isObject(%s))", ref)
-                ("return%j", invalid(field, "object"))
-            ("var k=Object.keys(%s)", ref)
-            ("for(var i=0;i<k.length;++i){");
-                genVerifyKey(gen, field, "k[i]");
-                genVerifyValue(gen, field, i, ref + "[k[i]]")
-            ("}");
+	        if (field.optional) gen
+	        ("if(%s!=null&&m.hasOwnProperty(%j)){", ref, field.name); // !== undefined && !== null
 
-        // repeated fields
-        } else if (field.repeated) { gen
-            ("if(!Array.isArray(%s))", ref)
-                ("return%j", invalid(field, "array"))
-            ("for(var i=0;i<%s.length;++i){", ref);
-                genVerifyValue(gen, field, i, ref + "[i]")
-            ("}");
+	        // map fields
+	        if (field.map) { gen
+	            ("if(!util.isObject(%s))", ref)
+	                ("return%j", invalid(field, "object"))
+	            ("var k=Object.keys(%s)", ref)
+	            ("for(var i=0;i<k.length;++i){");
+	                genVerifyKey(gen, field, "k[i]");
+	                genVerifyValue(gen, field, i, ref + "[k[i]]")
+	            ("}");
 
-        // required or present fields
-        } else {
-            if (field.partOf) {
-                var oneofProp = util$1.safeProp(field.partOf.name);
-                if (seenFirstField[field.partOf.name] === 1) gen
-            ("if(p%s===1)", oneofProp)
-                ("return%j", field.partOf.name + ": multiple values");
-                seenFirstField[field.partOf.name] = 1;
-                gen
-            ("p%s=1", oneofProp);
-            }
-            genVerifyValue(gen, field, i, ref);
-        }
-        if (field.optional) gen
-        ("}");
-    }
-    return gen
-    ("return null");
-    /* eslint-enable no-unexpected-multiline */
+	        // repeated fields
+	        } else if (field.repeated) { gen
+	            ("if(!Array.isArray(%s))", ref)
+	                ("return%j", invalid(field, "array"))
+	            ("for(var i=0;i<%s.length;++i){", ref);
+	                genVerifyValue(gen, field, i, ref + "[i]")
+	            ("}");
+
+	        // required or present fields
+	        } else {
+	            if (field.partOf) {
+	                var oneofProp = util.safeProp(field.partOf.name);
+	                if (seenFirstField[field.partOf.name] === 1) gen
+	            ("if(p%s===1)", oneofProp)
+	                ("return%j", field.partOf.name + ": multiple values");
+	                seenFirstField[field.partOf.name] = 1;
+	                gen
+	            ("p%s=1", oneofProp);
+	            }
+	            genVerifyValue(gen, field, i, ref);
+	        }
+	        if (field.optional) gen
+	        ("}");
+	    }
+	    return gen
+	    ("return null");
+	    /* eslint-enable no-unexpected-multiline */
+	}
+	return verifier_1;
 }
 
 var converter = {};
@@ -8639,7 +8647,7 @@ function requireType () {
 	    util      = requireUtil(),
 	    encoder   = requireEncoder(),
 	    decoder   = requireDecoder(),
-	    verifier  = verifier_1,
+	    verifier  = requireVerifier(),
 	    converter = requireConverter(),
 	    wrappers$1  = wrappers;
 
@@ -9587,7 +9595,7 @@ function requireRoot () {
 var hasRequiredUtil;
 
 function requireUtil () {
-	if (hasRequiredUtil) return util$3.exports;
+	if (hasRequiredUtil) return util$2.exports;
 	hasRequiredUtil = 1;
 	(function (module) {
 
@@ -9801,8 +9809,8 @@ function requireUtil () {
 		        return roots$1["decorated"] || (roots$1["decorated"] = new (requireRoot())());
 		    }
 		});
-} (util$3));
-	return util$3.exports;
+} (util$2));
+	return util$2.exports;
 }
 
 var object;
@@ -10429,7 +10437,7 @@ function requireEncoder () {
 	// Serialization
 	protobuf.encoder          = requireEncoder();
 	protobuf.decoder          = requireDecoder();
-	protobuf.verifier         = verifier_1;
+	protobuf.verifier         = requireVerifier();
 	protobuf.converter        = requireConverter();
 
 	// Reflection
