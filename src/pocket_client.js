@@ -22,9 +22,17 @@ function randomRoute() {
   return r;
 }
 
+const getHost = () => {
+  try {
+    return window.location.hostname
+  } catch(e){
+    return self.location.hostname
+  }
+}
+
 class ClientManager {
   constructor({ host, port }) {
-    this._host = self.location.hostname;
+    this._host = getHost();
     this._port = port;
     this._addresses = new Set();
     this._clients = new Map();
@@ -267,17 +275,24 @@ export default class PocketClient {
     if (typeof _reqObj === "string" && _reqObj.startsWith("http")) {
       const reqObj = _reqObj;
       const reqInit = _reqInit;
-      const url = new URL(reqObj);
+      if (_reqObj.startsWith('http')){
+        const url = new URL(reqObj);
+        if (url.host === getHost()) {
+          console.log("subdomain", _reqInit);
+          url.host = "localhost";
+          url.protocol = "http:";
+          url.port = "80";
+        }
+        reqObj = url.toString()
+      } else {
+        reqObj = `http://localhost${reqObj}`
+      }
       reqInit.headers = reqInit.headers || {};
       for (var pair of reqInit.headers.entries()) {
         reqInit.headers[pair[0]] = pair[1];
         console.log(pair[0] + ": " + pair[1]);
       }
-      reqInit.headers["X-Intercepted-Subdomain"] = url.hostname;
-      url.host = "localhost";
-      url.protocol = "http:";
-      url.port = "80";
-      reqObj = url.toString();
+      reqInit.headers["X-Intercepted-Subdomain"] = this.subdomain;
       return {reqObj, reqInit}
     }
     // if (typeof _reqObj === "string" && _reqObj.startsWith("http")) {
@@ -297,7 +312,7 @@ export default class PocketClient {
       console.log(pair[0] + ": " + pair[1]);
     }
 
-    if (url.host === self.location.hostname) {
+    if (url.host === getHost()) {
       console.log("subdomain", _reqInit);
       url.host = "localhost";
       url.protocol = "http:";
@@ -419,7 +434,8 @@ export default class PocketClient {
 
   async patchFetchBrowser() {
     this._fetch = window.fetch.bind(window);
-    this._host = `${self.location.hostname}:${this._port}`;
+    this._host = `${window.location.hostname}:${this._port}`;
+    this._hostname = window.location.hostname;
     window.fetch = this.pocketFetch.bind(this);
 
     this.patchXHR();
@@ -427,7 +443,8 @@ export default class PocketClient {
 
   async patchFetchWorker() {
     this._fetch = self.fetch.bind(self);
-    this._host = `${self.location.hostname}:${this._port}`;
+    this._host = `${getHost()}:${this._port}`;
+    this._hostname = getHost()
     self.fetch = this.pocketFetch.bind(this);
   }
 
