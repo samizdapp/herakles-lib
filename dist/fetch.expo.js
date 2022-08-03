@@ -5,7 +5,7 @@ Object.defineProperty(exports, '__esModule', { value: true });
 var AsyncStorage = require('@react-native-async-storage/async-storage');
 var crypto__default = require('crypto');
 var require$$2 = require('stream');
-var _2keyRatchet = require('2key-ratchet');
+var events = require('events');
 var process$1 = require('process');
 
 function _interopDefaultLegacy (e) { return e && typeof e === 'object' && 'default' in e ? e : { 'default': e }; }
@@ -34,11 +34,11 @@ var crypto__default__namespace = /*#__PURE__*/_interopNamespace(crypto__default)
 var require$$2__default = /*#__PURE__*/_interopDefaultLegacy(require$$2);
 var process__namespace = /*#__PURE__*/_interopNamespace(process$1);
 
-var global$1 = (typeof global !== "undefined" ? global :
+var global$2 = (typeof global$1 !== "undefined" ? global$1 :
   typeof self !== "undefined" ? self :
   typeof window !== "undefined" ? window : {});
 
-var global = (typeof global$1 !== "undefined" ? global$1 :
+var global$1 = (typeof global$2 !== "undefined" ? global$2 :
             typeof self !== "undefined" ? self :
             typeof window !== "undefined" ? window : {});
 
@@ -269,8 +269,8 @@ var INSPECT_MAX_BYTES = 50;
  * We detect these buggy browsers and set `Buffer.TYPED_ARRAY_SUPPORT` to `false` so they
  * get the Object implementation, which is slower but behaves correctly.
  */
-Buffer.TYPED_ARRAY_SUPPORT = global.TYPED_ARRAY_SUPPORT !== undefined
-  ? global.TYPED_ARRAY_SUPPORT
+Buffer.TYPED_ARRAY_SUPPORT = global$1.TYPED_ARRAY_SUPPORT !== undefined
+  ? global$1.TYPED_ARRAY_SUPPORT
   : true;
 
 /*
@@ -2089,6 +2089,8 @@ class ExpoStorage extends Storage {
   }
 }
 
+var commonjsGlobal = typeof globalThis !== 'undefined' ? globalThis : typeof window !== 'undefined' ? window : typeof global !== 'undefined' ? global : typeof self !== 'undefined' ? self : {};
+
 var lobEnc = {};
 
 var chacha20 = {};
@@ -2461,10 +2463,10 @@ function defaultClearTimeout () {
 }
 var cachedSetTimeout = defaultSetTimout;
 var cachedClearTimeout = defaultClearTimeout;
-if (typeof global.setTimeout === 'function') {
+if (typeof global$1.setTimeout === 'function') {
     cachedSetTimeout = setTimeout;
 }
-if (typeof global.clearTimeout === 'function') {
+if (typeof global$1.clearTimeout === 'function') {
     cachedClearTimeout = clearTimeout;
 }
 
@@ -2593,15 +2595,15 @@ var versions = {};
 var release = {};
 var config = {};
 
-function noop() {}
+function noop$1() {}
 
-var on = noop;
-var addListener = noop;
-var once = noop;
-var off = noop;
-var removeListener = noop;
-var removeAllListeners = noop;
-var emit = noop;
+var on = noop$1;
+var addListener = noop$1;
+var once = noop$1;
+var off = noop$1;
+var removeListener = noop$1;
+var removeAllListeners = noop$1;
+var emit = noop$1;
 
 function binding(name) {
     throw new Error('process.binding is not supported');
@@ -2613,7 +2615,7 @@ function chdir (dir) {
 }function umask() { return 0; }
 
 // from https://github.com/kumavis/browser-process-hrtime/blob/master/index.js
-var performance = global.performance || {};
+var performance = global$1.performance || {};
 var performanceNow =
   performance.now        ||
   performance.mozNow     ||
@@ -2637,8 +2639,6 @@ function hrtime(previousTimestamp){
     }
   }
   return [seconds,nanoseconds]
-<<<<<<< HEAD
-=======
 }
 
 var startTime = new Date();
@@ -12943,41 +12943,275 @@ class ReceivingRatchet extends SymmetricRatchet {
         const key = this.keys[counter];
         return key;
     }
->>>>>>> e0deb03
 }
 
-var startTime = new Date();
-function uptime() {
-  var currentTime = new Date();
-  var dif = currentTime - startTime;
-  return dif / 1000;
+async function authenticateA(IKa, EKa, IKb, SPKb, OPKb) {
+    const DH1 = await Curve.deriveBytes(IKa.exchangeKey.privateKey, SPKb);
+    const DH2 = await Curve.deriveBytes(EKa.privateKey, IKb);
+    const DH3 = await Curve.deriveBytes(EKa.privateKey, SPKb);
+    let DH4 = new ArrayBuffer(0);
+    if (OPKb) {
+        DH4 = await Curve.deriveBytes(EKa.privateKey, OPKb);
+    }
+    const _F = new Uint8Array(32);
+    for (let i = 0; i < _F.length; i++) {
+        _F[i] = 0xff;
+    }
+    const F = _F.buffer;
+    const KM = combine(F, DH1, DH2, DH3, DH4);
+    const keys = await Secret.HKDF(KM, 1, void 0, INFO_TEXT);
+    return await Secret.importHMAC(keys[0]);
 }
-
-var process = {
-  nextTick: nextTick,
-  title: title,
-  browser: browser,
-  env: env,
-  argv: argv,
-  version: version,
-  versions: versions,
-  on: on,
-  addListener: addListener,
-  once: once,
-  off: off,
-  removeListener: removeListener,
-  removeAllListeners: removeAllListeners,
-  emit: emit,
-  binding: binding,
-  cwd: cwd,
-  chdir: chdir,
-  umask: umask,
-  hrtime: hrtime,
-  platform: platform,
-  release: release,
-  config: config,
-  uptime: uptime
-};
+async function authenticateB(IKb, SPKb, IKa, EKa, OPKb) {
+    const DH1 = await Curve.deriveBytes(SPKb.privateKey, IKa);
+    const DH2 = await Curve.deriveBytes(IKb.exchangeKey.privateKey, EKa);
+    const DH3 = await Curve.deriveBytes(SPKb.privateKey, EKa);
+    let DH4 = new ArrayBuffer(0);
+    if (OPKb) {
+        DH4 = await Curve.deriveBytes(OPKb, EKa);
+    }
+    const _F = new Uint8Array(32);
+    for (let i = 0; i < _F.length; i++) {
+        _F[i] = 0xff;
+    }
+    const F = _F.buffer;
+    const KM = combine(F, DH1, DH2, DH3, DH4);
+    const keys = await Secret.HKDF(KM, 1, void 0, INFO_TEXT);
+    return await Secret.importHMAC(keys[0]);
+}
+class AsymmetricRatchet extends events.EventEmitter {
+    constructor(options = {}) {
+        super();
+        this.options = options;
+        this.counter = 0;
+        this.currentStep = new DHRatchetStep();
+        this.steps = new DHRatchetStepStack(MAX_RATCHET_STACK_SIZE);
+        this.promises = {};
+    }
+    static async create(identity, protocol, options = {}) {
+        let rootKey;
+        const ratchet = new AsymmetricRatchet(options);
+        if (protocol instanceof PreKeyBundleProtocol) {
+            if (!await protocol.identity.verify()) {
+                throw new Error("Error: Remote client's identity key is invalid.");
+            }
+            if (!await protocol.preKeySigned.verify(protocol.identity.signingKey)) {
+                throw new Error("Error: Remote client's signed prekey is invalid.");
+            }
+            ratchet.currentRatchetKey = await ratchet.generateRatchetKey();
+            ratchet.currentStep.remoteRatchetKey = protocol.preKeySigned.key;
+            ratchet.remoteIdentity = RemoteIdentity.fill(protocol.identity);
+            ratchet.remoteIdentity.id = protocol.registrationId;
+            ratchet.remotePreKeyId = protocol.preKey.id;
+            ratchet.remotePreKeySignedId = protocol.preKeySigned.id;
+            rootKey = await authenticateA(identity, ratchet.currentRatchetKey, protocol.identity.exchangeKey, protocol.preKeySigned.key, protocol.preKey.key);
+        }
+        else {
+            if (!await protocol.identity.verify()) {
+                throw new Error("Error: Remote client's identity key is invalid.");
+            }
+            const signedPreKey = identity.signedPreKeys[protocol.preKeySignedId];
+            if (!signedPreKey) {
+                throw new Error(`Error: PreKey with id ${protocol.preKeySignedId} not found`);
+            }
+            let preKey;
+            if (protocol.preKeyId !== void 0) {
+                preKey = identity.preKeys[protocol.preKeyId];
+            }
+            ratchet.remoteIdentity = RemoteIdentity.fill(protocol.identity);
+            ratchet.currentRatchetKey = signedPreKey;
+            rootKey = await authenticateB(identity, ratchet.currentRatchetKey, protocol.identity.exchangeKey, protocol.signedMessage.message.senderRatchetKey, preKey && preKey.privateKey);
+        }
+        ratchet.identity = identity;
+        ratchet.id = identity.id;
+        ratchet.rootKey = rootKey;
+        return ratchet;
+    }
+    static async fromJSON(identity, remote, obj) {
+        const res = new AsymmetricRatchet();
+        res.identity = identity;
+        res.remoteIdentity = remote;
+        await res.fromJSON(obj);
+        return res;
+    }
+    on(event, listener) {
+        return super.on(event, listener);
+    }
+    once(event, listener) {
+        return super.once(event, listener);
+    }
+    async decrypt(protocol) {
+        return this.queuePromise("encrypt", async () => {
+            const remoteRatchetKey = protocol.message.senderRatchetKey;
+            const message = protocol.message;
+            if (protocol.message.previousCounter < this.counter - MAX_RATCHET_STACK_SIZE) {
+                throw new Error("Error: Too old message");
+            }
+            let step = this.steps.getStep(remoteRatchetKey);
+            if (!step) {
+                const ratchetStep = new DHRatchetStep();
+                ratchetStep.remoteRatchetKey = remoteRatchetKey;
+                this.steps.push(ratchetStep);
+                this.currentStep = ratchetStep;
+                step = ratchetStep;
+            }
+            if (!step.receivingChain) {
+                step.receivingChain = await this.createChain(this.currentRatchetKey.privateKey, remoteRatchetKey, ReceivingRatchet);
+            }
+            const decryptedMessage = await step.receivingChain.decrypt(message.cipherText, message.counter);
+            this.update();
+            protocol.senderKey = this.remoteIdentity.signingKey;
+            protocol.receiverKey = this.identity.signingKey.publicKey;
+            if (!await protocol.verify(decryptedMessage.hmacKey)) {
+                throw new Error("Error: The Message did not successfully verify!");
+            }
+            return decryptedMessage.cipherText;
+        });
+    }
+    async encrypt(message) {
+        return this.queuePromise("encrypt", async () => {
+            if (this.currentStep.receivingChain && !this.currentStep.sendingChain) {
+                this.counter++;
+                this.currentRatchetKey = await this.generateRatchetKey();
+            }
+            if (!this.currentStep.sendingChain) {
+                if (!this.currentStep.remoteRatchetKey) {
+                    throw new Error("currentStep has empty remoteRatchetKey");
+                }
+                this.currentStep.sendingChain = await this.createChain(this.currentRatchetKey.privateKey, this.currentStep.remoteRatchetKey, SendingRatchet);
+            }
+            const encryptedMessage = await this.currentStep.sendingChain.encrypt(message);
+            this.update();
+            let preKeyMessage;
+            if (this.steps.length === 0 &&
+                !this.currentStep.receivingChain &&
+                this.currentStep.sendingChain.counter === 1) {
+                preKeyMessage = new PreKeyMessageProtocol();
+                preKeyMessage.registrationId = this.identity.id;
+                preKeyMessage.preKeyId = this.remotePreKeyId;
+                preKeyMessage.preKeySignedId = this.remotePreKeySignedId;
+                preKeyMessage.baseKey = this.currentRatchetKey.publicKey;
+                await preKeyMessage.identity.fill(this.identity);
+            }
+            const signedMessage = new MessageSignedProtocol();
+            signedMessage.receiverKey = this.remoteIdentity.signingKey;
+            signedMessage.senderKey = this.identity.signingKey.publicKey;
+            signedMessage.message.cipherText = encryptedMessage.cipherText;
+            signedMessage.message.counter = this.currentStep.sendingChain.counter - 1;
+            signedMessage.message.previousCounter = this.counter;
+            signedMessage.message.senderRatchetKey = this.currentRatchetKey.publicKey;
+            await signedMessage.sign(encryptedMessage.hmacKey);
+            if (preKeyMessage) {
+                preKeyMessage.signedMessage = signedMessage;
+                return preKeyMessage;
+            }
+            else {
+                return signedMessage;
+            }
+        });
+    }
+    async hasRatchetKey(key) {
+        let ecKey;
+        if (!(key instanceof ECPublicKey)) {
+            ecKey = await ECPublicKey.create(key);
+        }
+        else {
+            ecKey = key;
+        }
+        for (const item of this.steps.items) {
+            if (await item.remoteRatchetKey.isEqual(ecKey)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    async toJSON() {
+        return {
+            counter: this.counter,
+            ratchetKey: await Curve.ecKeyPairToJson(this.currentRatchetKey),
+            remoteIdentity: await this.remoteIdentity.signingKey.thumbprint(),
+            rootKey: this.rootKey,
+            steps: await this.steps.toJSON(),
+        };
+    }
+    async fromJSON(obj) {
+        this.currentRatchetKey = await Curve.ecKeyPairFromJson(obj.ratchetKey);
+        this.counter = obj.counter;
+        this.rootKey = obj.rootKey;
+        for (const step of obj.steps) {
+            this.currentStep = await DHRatchetStep.fromJSON(step);
+            this.steps.push(this.currentStep);
+        }
+    }
+    update() {
+        this.emit("update");
+    }
+    generateRatchetKey() {
+        return Curve.generateKeyPair("ECDH", !!this.options.exportableKeys);
+    }
+    async createChain(ourRatchetKey, theirRatchetKey, ratchetClass) {
+        const derivedBytes = await Curve.deriveBytes(ourRatchetKey, theirRatchetKey);
+        const keys = await Secret.HKDF(derivedBytes, 2, this.rootKey, INFO_RATCHET);
+        const rootKey = await Secret.importHMAC(keys[0]);
+        const chainKey = await Secret.importHMAC(keys[1]);
+        const chain = new ratchetClass(chainKey);
+        this.rootKey = rootKey;
+        return chain;
+    }
+    queuePromise(key, fn) {
+        const prev = this.promises[key] || Promise.resolve();
+        const cur = this.promises[key] = prev.then(fn, fn);
+        cur.then(() => {
+            if (this.promises[key] === cur) {
+                delete this.promises[key];
+            }
+        });
+        return cur;
+    }
+}
+class DHRatchetStep {
+    static async fromJSON(obj) {
+        const res = new this();
+        await res.fromJSON(obj);
+        return res;
+    }
+    async toJSON() {
+        const res = {};
+        if (this.remoteRatchetKey) {
+            res.remoteRatchetKey = this.remoteRatchetKey.key;
+        }
+        if (this.sendingChain) {
+            res.sendingChain = await this.sendingChain.toJSON();
+        }
+        if (this.receivingChain) {
+            res.receivingChain = await this.receivingChain.toJSON();
+        }
+        return res;
+    }
+    async fromJSON(obj) {
+        if (obj.remoteRatchetKey) {
+            this.remoteRatchetKey = await ECPublicKey.create(obj.remoteRatchetKey);
+        }
+        if (obj.sendingChain) {
+            this.sendingChain = await SendingRatchet.fromJSON(obj.sendingChain);
+        }
+        if (obj.receivingChain) {
+            this.receivingChain = await ReceivingRatchet.fromJSON(obj.receivingChain);
+        }
+    }
+}
+class DHRatchetStepStack extends Stack {
+    getStep(remoteRatchetKey) {
+        let found;
+        this.items.some((step) => {
+            if (step.remoteRatchetKey.id === remoteRatchetKey.id) {
+                found = step;
+            }
+            return !!found;
+        });
+        return found;
+    }
+}
 
 var DEFAULT_SEPARATOR = '.';
 var DEFAULT_TRAVERSAL_OPTS = {
@@ -13224,8 +13458,8 @@ const AES_ALGORITHM = { name: "AES-CBC", length: 256 };
 const HASH_NAME = "SHA-256";
 const HMAC_NAME = "HMAC";
 
-_2keyRatchet.Secret.importHMAC = (raw) => {
-  return _2keyRatchet.getEngine().crypto.subtle.importKey(
+Secret.importHMAC = (raw) => {
+  return getEngine().crypto.subtle.importKey(
     "raw",
     raw,
     { name: HMAC_NAME, hash: { name: HASH_NAME } },
@@ -13234,8 +13468,8 @@ _2keyRatchet.Secret.importHMAC = (raw) => {
   );
 };
 
-_2keyRatchet.Secret.importAES = (raw) => {
-  return _2keyRatchet.getEngine().crypto.subtle.importKey("raw", raw, AES_ALGORITHM, true, [
+Secret.importAES = (raw) => {
+  return getEngine().crypto.subtle.importKey("raw", raw, AES_ALGORITHM, true, [
     "encrypt",
     "decrypt",
   ]);
@@ -13247,17 +13481,17 @@ const getFormatFromAlg = ({ name }) =>
 
 class Ratchet {
   static useCrypto(Crypto, _CryptoKey) {
-    _2keyRatchet.setEngine("@peculiar/webcrypto", new Crypto());
+    setEngine("@peculiar/webcrypto", new Crypto());
     CryptoKey$2 = _CryptoKey;
   }
 
   static useSubtle() {
-    _2keyRatchet.setEngine("webcrypto", window.crypto);
+    setEngine("webcrypto", window.crypto);
     CryptoKey$2 = window.CryptoKey;
   }
 
   static useIsoCrypto(iso, key) {
-    _2keyRatchet.setEngine("isomorphic", iso);
+    setEngine("isomorphic", iso);
     CryptoKey$2 = key;
   }
 
@@ -13288,8 +13522,8 @@ class Ratchet {
   }
 
   async importBundle(bundle) {
-    const decoded = await _2keyRatchet.PreKeyBundleProtocol.importProto(bundle);
-    const cipher = await _2keyRatchet.AsymmetricRatchet.create(this._identity, decoded, {
+    const decoded = await PreKeyBundleProtocol.importProto(bundle);
+    const cipher = await AsymmetricRatchet.create(this._identity, decoded, {
       exportableKeys: true,
     });
 
@@ -13297,8 +13531,8 @@ class Ratchet {
   }
 
   async importMessage(proto) {
-    const decoded = await _2keyRatchet.PreKeyMessageProtocol.importProto(proto);
-    const cipher = await _2keyRatchet.AsymmetricRatchet.create(this._identity, decoded, {
+    const decoded = await PreKeyMessageProtocol.importProto(proto);
+    const cipher = await AsymmetricRatchet.create(this._identity, decoded, {
       exportableKeys: true,
     });
 
@@ -13340,7 +13574,7 @@ class Ratchet {
 
   async _createCipher(message) {
     // console.log("CREATE", message);
-    return _2keyRatchet.AsymmetricRatchet.create(await this.getIdentity(), message, {
+    return AsymmetricRatchet.create(await this.getIdentity(), message, {
       exportableKeys: true,
     });
   }
@@ -13354,9 +13588,9 @@ class Ratchet {
 
   async unpackBuffer(buffer) {
     console.log("unpack buffer", buffer);
-    const message = await _2keyRatchet.MessageSignedProtocol.importProto(buffer)
-      .catch((error) => _2keyRatchet.PreKeyMessageProtocol.importProto(buffer))
-      .catch((error) => _2keyRatchet.PreKeyBundleProtocol.importProto(buffer));
+    const message = await MessageSignedProtocol.importProto(buffer)
+      .catch((error) => PreKeyMessageProtocol.importProto(buffer))
+      .catch((error) => PreKeyBundleProtocol.importProto(buffer));
 
     // console.log("message", message);
     const id = message.identity
@@ -13418,7 +13652,7 @@ class Ratchet {
 
     if (cipher) return cipher;
 
-    cipher = await _2keyRatchet.AsymmetricRatchet.create(await this.getIdentity(), message, {
+    cipher = await AsymmetricRatchet.create(await this.getIdentity(), message, {
       exportableKeys: true,
     });
 
@@ -13431,9 +13665,9 @@ class Ratchet {
 
   async remoteIdentity() {
     if (this._remote) return this._remote;
-    const proto = await _2keyRatchet.IdentityProtocol.fill(this._identity);
+    const proto = await IdentityProtocol.fill(this._identity);
     await proto.sign(this._identity.signingKey.privateKey);
-    const remote = await _2keyRatchet.RemoteIdentity.fill(proto);
+    const remote = await RemoteIdentity.fill(proto);
     this._remote = remote;
     return remote;
   }
@@ -13449,7 +13683,7 @@ class Ratchet {
   async _decodeSelfIdentity(b64) {
     const json = b64ToJSON(b64);
     await this._importKeys(json);
-    const identity = await _2keyRatchet.Identity.fromJSON(json);
+    const identity = await Identity.fromJSON(json);
     identity.id = json.id;
     return identity;
   }
@@ -13462,7 +13696,7 @@ class Ratchet {
   async _decodeRemoteIdentity(b64) {
     const json = b64ToJSON(b64);
     await this._importKeys(json);
-    const identity = await _2keyRatchet.RemoteIdentity.fromJSON(json);
+    const identity = await RemoteIdentity.fromJSON(json);
     identity.id = json.id;
     return identity;
   }
@@ -13477,7 +13711,7 @@ class Ratchet {
   }
 
   async _createIdentity() {
-    return _2keyRatchet.Identity.create(
+    return Identity.create(
       this._options.id,
       this._options.signedPreKeyAmount,
       this._options.preKeyAmount,
@@ -13488,7 +13722,7 @@ class Ratchet {
   async _createBundle() {
     const identity = await this.getIdentity();
 
-    const bundle = new _2keyRatchet.PreKeyBundleProtocol();
+    const bundle = new PreKeyBundleProtocol();
     bundle.registrationId = identity.id;
     console.log("ID?", bundle.registrationId, identity.id);
     await bundle.identity.fill(identity);
@@ -13545,7 +13779,7 @@ class Ratchet {
     const json = b64ToJSON(b64);
     await this._importKeys(json);
 
-    const remote = await _2keyRatchet.RemoteIdentity.fromJSON(json);
+    const remote = await RemoteIdentity.fromJSON(json);
     remote.id = json.id;
     return remote;
   }
@@ -13558,7 +13792,7 @@ class Ratchet {
           (async function exportKey() {
             const format = getFormatFromAlg(value.algorithm);
             // console.log("key", value.algorithm, format);
-            const engine = _2keyRatchet.getEngine();
+            const engine = getEngine();
             // console.log("engine", engine);
             const exported = await engine.crypto.subtle
               .exportKey(format, value)
@@ -13615,7 +13849,7 @@ class Ratchet {
             const toImport =
               format === "raw" ? buf : JSON.parse(buf.toString());
             // console.log("key", toImport, format);
-            const engine = await _2keyRatchet.getEngine();
+            const engine = await getEngine();
             const imported = await engine.crypto.subtle
               .importKey(
                 format,
@@ -13672,7 +13906,7 @@ class Ratchet {
     // console.log("b64", b64);
     const json = b64ToJSON(b64);
     await this._importKeys(json);
-    const cipher = await _2keyRatchet.AsymmetricRatchet.fromJSON(identity, remote, json);
+    const cipher = await AsymmetricRatchet.fromJSON(identity, remote, json);
     cipher.options = json.options;
     cipher.id = json.id;
     return cipher;
@@ -13696,8 +13930,8 @@ class RatchetClient {
     this._ratchet = new Ratchet(Storage, { id });
     this._host = host;
     this._storage = new Storage(namespace);
-    if (global.fetch) {
-      this._fetch = global.fetch;
+    if (global$1.fetch) {
+      this._fetch = global$1.fetch;
     }
     this._fetchJob = Promise.resolve();
   }
@@ -13777,7 +14011,7 @@ class RatchetClient {
   }
 
   async patchFetch() {
-    global.fetch = async (reqObj, reqInit) => {
+    global$1.fetch = async (reqObj, reqInit) => {
       console.log("patched fetch", reqObj, reqInit);
       const body = await this.encryptFetch(reqObj, reqInit);
       const config = {
@@ -13814,351 +14048,6 @@ class RatchetClient {
       return this._fetchJob;
     };
   }
-}
-
-/*!
- * MIT License
- * 
- * Copyright (c) 2017-2022 Peculiar Ventures, LLC
- * 
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- * 
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- * 
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- * 
- */
-
-const ARRAY_BUFFER_NAME = "[object ArrayBuffer]";
-class BufferSourceConverter {
-    static isArrayBuffer(data) {
-        return Object.prototype.toString.call(data) === ARRAY_BUFFER_NAME;
-    }
-    static toArrayBuffer(data) {
-        if (this.isArrayBuffer(data)) {
-            return data;
-        }
-        if (data.byteLength === data.buffer.byteLength) {
-            return data.buffer;
-        }
-        return this.toUint8Array(data).slice().buffer;
-    }
-    static toUint8Array(data) {
-        return this.toView(data, Uint8Array);
-    }
-    static toView(data, type) {
-        if (data.constructor === type) {
-            return data;
-        }
-        if (this.isArrayBuffer(data)) {
-            return new type(data);
-        }
-        if (this.isArrayBufferView(data)) {
-            return new type(data.buffer, data.byteOffset, data.byteLength);
-        }
-        throw new TypeError("The provided value is not of type '(ArrayBuffer or ArrayBufferView)'");
-    }
-    static isBufferSource(data) {
-        return this.isArrayBufferView(data)
-            || this.isArrayBuffer(data);
-    }
-    static isArrayBufferView(data) {
-        return ArrayBuffer.isView(data)
-            || (data && this.isArrayBuffer(data.buffer));
-    }
-    static isEqual(a, b) {
-        const aView = BufferSourceConverter.toUint8Array(a);
-        const bView = BufferSourceConverter.toUint8Array(b);
-        if (aView.length !== bView.byteLength) {
-            return false;
-        }
-        for (let i = 0; i < aView.length; i++) {
-            if (aView[i] !== bView[i]) {
-                return false;
-            }
-        }
-        return true;
-    }
-    static concat(...args) {
-        if (Array.isArray(args[0])) {
-            const buffers = args[0];
-            let size = 0;
-            for (const buffer of buffers) {
-                size += buffer.byteLength;
-            }
-            const res = new Uint8Array(size);
-            let offset = 0;
-            for (const buffer of buffers) {
-                const view = this.toUint8Array(buffer);
-                res.set(view, offset);
-                offset += view.length;
-            }
-            if (args[1]) {
-                return this.toView(res, args[1]);
-            }
-            return res.buffer;
-        }
-        else {
-            return this.concat(args);
-        }
-    }
-}
-
-class Utf8Converter {
-    static fromString(text) {
-        const s = unescape(encodeURIComponent(text));
-        const uintArray = new Uint8Array(s.length);
-        for (let i = 0; i < s.length; i++) {
-            uintArray[i] = s.charCodeAt(i);
-        }
-        return uintArray.buffer;
-    }
-    static toString(buffer) {
-        const buf = BufferSourceConverter.toUint8Array(buffer);
-        let encodedString = "";
-        for (let i = 0; i < buf.length; i++) {
-            encodedString += String.fromCharCode(buf[i]);
-        }
-        const decodedString = decodeURIComponent(escape(encodedString));
-        return decodedString;
-    }
-}
-class Utf16Converter {
-    static toString(buffer, littleEndian = false) {
-        const arrayBuffer = BufferSourceConverter.toArrayBuffer(buffer);
-        const dataView = new DataView(arrayBuffer);
-        let res = "";
-        for (let i = 0; i < arrayBuffer.byteLength; i += 2) {
-            const code = dataView.getUint16(i, littleEndian);
-            res += String.fromCharCode(code);
-        }
-        return res;
-    }
-    static fromString(text, littleEndian = false) {
-        const res = new ArrayBuffer(text.length * 2);
-        const dataView = new DataView(res);
-        for (let i = 0; i < text.length; i++) {
-            dataView.setUint16(i * 2, text.charCodeAt(i), littleEndian);
-        }
-        return res;
-    }
-}
-class Convert {
-    static isHex(data) {
-        return typeof data === "string"
-            && /^[a-z0-9]+$/i.test(data);
-    }
-    static isBase64(data) {
-        return typeof data === "string"
-            && /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(data);
-    }
-    static isBase64Url(data) {
-        return typeof data === "string"
-            && /^[a-zA-Z0-9-_]+$/i.test(data);
-    }
-    static ToString(buffer, enc = "utf8") {
-        const buf = BufferSourceConverter.toUint8Array(buffer);
-        switch (enc.toLowerCase()) {
-            case "utf8":
-                return this.ToUtf8String(buf);
-            case "binary":
-                return this.ToBinary(buf);
-            case "hex":
-                return this.ToHex(buf);
-            case "base64":
-                return this.ToBase64(buf);
-            case "base64url":
-                return this.ToBase64Url(buf);
-            case "utf16le":
-                return Utf16Converter.toString(buf, true);
-            case "utf16":
-            case "utf16be":
-                return Utf16Converter.toString(buf);
-            default:
-                throw new Error(`Unknown type of encoding '${enc}'`);
-        }
-    }
-    static FromString(str, enc = "utf8") {
-        if (!str) {
-            return new ArrayBuffer(0);
-        }
-        switch (enc.toLowerCase()) {
-            case "utf8":
-                return this.FromUtf8String(str);
-            case "binary":
-                return this.FromBinary(str);
-            case "hex":
-                return this.FromHex(str);
-            case "base64":
-                return this.FromBase64(str);
-            case "base64url":
-                return this.FromBase64Url(str);
-            case "utf16le":
-                return Utf16Converter.fromString(str, true);
-            case "utf16":
-            case "utf16be":
-                return Utf16Converter.fromString(str);
-            default:
-                throw new Error(`Unknown type of encoding '${enc}'`);
-        }
-    }
-    static ToBase64(buffer) {
-        const buf = BufferSourceConverter.toUint8Array(buffer);
-        if (typeof btoa !== "undefined") {
-            const binary = this.ToString(buf, "binary");
-            return btoa(binary);
-        }
-        else {
-            return Buffer.from(buf).toString("base64");
-        }
-    }
-    static FromBase64(base64) {
-        const formatted = this.formatString(base64);
-        if (!formatted) {
-            return new ArrayBuffer(0);
-        }
-        if (!Convert.isBase64(formatted)) {
-            throw new TypeError("Argument 'base64Text' is not Base64 encoded");
-        }
-        if (typeof atob !== "undefined") {
-            return this.FromBinary(atob(formatted));
-        }
-        else {
-            return new Uint8Array(Buffer.from(formatted, "base64")).buffer;
-        }
-    }
-    static FromBase64Url(base64url) {
-        const formatted = this.formatString(base64url);
-        if (!formatted) {
-            return new ArrayBuffer(0);
-        }
-        if (!Convert.isBase64Url(formatted)) {
-            throw new TypeError("Argument 'base64url' is not Base64Url encoded");
-        }
-        return this.FromBase64(this.Base64Padding(formatted.replace(/\-/g, "+").replace(/\_/g, "/")));
-    }
-    static ToBase64Url(data) {
-        return this.ToBase64(data).replace(/\+/g, "-").replace(/\//g, "_").replace(/\=/g, "");
-    }
-    static FromUtf8String(text, encoding = Convert.DEFAULT_UTF8_ENCODING) {
-        switch (encoding) {
-            case "ascii":
-                return this.FromBinary(text);
-            case "utf8":
-                return Utf8Converter.fromString(text);
-            case "utf16":
-            case "utf16be":
-                return Utf16Converter.fromString(text);
-            case "utf16le":
-            case "usc2":
-                return Utf16Converter.fromString(text, true);
-            default:
-                throw new Error(`Unknown type of encoding '${encoding}'`);
-        }
-    }
-    static ToUtf8String(buffer, encoding = Convert.DEFAULT_UTF8_ENCODING) {
-        switch (encoding) {
-            case "ascii":
-                return this.ToBinary(buffer);
-            case "utf8":
-                return Utf8Converter.toString(buffer);
-            case "utf16":
-            case "utf16be":
-                return Utf16Converter.toString(buffer);
-            case "utf16le":
-            case "usc2":
-                return Utf16Converter.toString(buffer, true);
-            default:
-                throw new Error(`Unknown type of encoding '${encoding}'`);
-        }
-    }
-    static FromBinary(text) {
-        const stringLength = text.length;
-        const resultView = new Uint8Array(stringLength);
-        for (let i = 0; i < stringLength; i++) {
-            resultView[i] = text.charCodeAt(i);
-        }
-        return resultView.buffer;
-    }
-    static ToBinary(buffer) {
-        const buf = BufferSourceConverter.toUint8Array(buffer);
-        let res = "";
-        for (let i = 0; i < buf.length; i++) {
-            res += String.fromCharCode(buf[i]);
-        }
-        return res;
-    }
-    static ToHex(buffer) {
-        const buf = BufferSourceConverter.toUint8Array(buffer);
-        const splitter = "";
-        const res = [];
-        const len = buf.length;
-        for (let i = 0; i < len; i++) {
-            const char = buf[i].toString(16).padStart(2, "0");
-            res.push(char);
-        }
-        return res.join(splitter);
-    }
-    static FromHex(hexString) {
-        let formatted = this.formatString(hexString);
-        if (!formatted) {
-            return new ArrayBuffer(0);
-        }
-        if (!Convert.isHex(formatted)) {
-            throw new TypeError("Argument 'hexString' is not HEX encoded");
-        }
-        if (formatted.length % 2) {
-            formatted = `0${formatted}`;
-        }
-        const res = new Uint8Array(formatted.length / 2);
-        for (let i = 0; i < formatted.length; i = i + 2) {
-            const c = formatted.slice(i, i + 2);
-            res[i / 2] = parseInt(c, 16);
-        }
-        return res.buffer;
-    }
-    static ToUtf16String(buffer, littleEndian = false) {
-        return Utf16Converter.toString(buffer, littleEndian);
-    }
-    static FromUtf16String(text, littleEndian = false) {
-        return Utf16Converter.fromString(text, littleEndian);
-    }
-    static Base64Padding(base64) {
-        const padCount = 4 - (base64.length % 4);
-        if (padCount < 4) {
-            for (let i = 0; i < padCount; i++) {
-                base64 += "=";
-            }
-        }
-        return base64;
-    }
-    static formatString(data) {
-        return (data === null || data === void 0 ? void 0 : data.replace(/[\n\r\t ]/g, "")) || "";
-    }
-}
-Convert.DEFAULT_UTF8_ENCODING = "utf8";
-function combine(...buf) {
-    const totalByteLength = buf.map((item) => item.byteLength).reduce((prev, cur) => prev + cur);
-    const res = new Uint8Array(totalByteLength);
-    let currentPos = 0;
-    buf.map((item) => new Uint8Array(item)).forEach((arr) => {
-        for (const item2 of arr) {
-            res[currentPos++] = item2;
-        }
-    });
-    return res.buffer;
 }
 
 /*!
@@ -15375,7 +15264,7 @@ class LocalBooleanValueBlock extends HexBlock(ValueBlock) {
 LocalBooleanValueBlock.NAME = "BooleanValueBlock";
 
 var _a$s;
-class Boolean extends BaseBlock {
+class Boolean$1 extends BaseBlock {
     constructor(parameters = {}) {
         super(parameters, LocalBooleanValueBlock);
         this.idBlock.tagClass = 1;
@@ -15391,11 +15280,11 @@ class Boolean extends BaseBlock {
         return `${this.constructor.NAME} : ${this.getValue}`;
     }
 }
-_a$s = Boolean;
+_a$s = Boolean$1;
 (() => {
     typeStore.Boolean = _a$s;
 })();
-Boolean.NAME = "BOOLEAN";
+Boolean$1.NAME = "BOOLEAN";
 
 class LocalOctetStringValueBlock extends HexBlock(LocalConstructedValueBlock) {
     constructor({ isConstructed = false, ...parameters } = {}) {
@@ -17432,7 +17321,7 @@ var asn1 = /*#__PURE__*/Object.freeze({
   BaseStringBlock: BaseStringBlock,
   BitString: BitString,
   BmpString: BmpString,
-  Boolean: Boolean,
+  Boolean: Boolean$1,
   CharacterString: CharacterString,
   Choice: Choice,
   Constructed: Constructed,
@@ -17524,7 +17413,7 @@ const AsnAnyConverter = {
     },
 };
 const AsnIntegerConverter = {
-    fromASN: (value) => value.valueBlock.valueHexView.byteLength >= 4
+    fromASN: (value) => value.valueBlock.valueHex.byteLength > 4
         ? value.valueBlock.toString()
         : value.valueBlock.valueDec,
     toASN: (value) => new Integer({ value: value }),
@@ -17543,7 +17432,7 @@ const AsnObjectIdentifierConverter = {
 };
 const AsnBooleanConverter = {
     fromASN: (value) => value.valueBlock.value,
-    toASN: (value) => new Boolean({ value }),
+    toASN: (value) => new Boolean$1({ value }),
 };
 const AsnOctetStringConverter = {
     fromASN: (value) => value.valueBlock.valueHex,
@@ -17870,7 +17759,20 @@ class AsnSchemaValidationError extends Error {
 
 class AsnParser {
     static parse(data, target) {
-        const asn1Parsed = fromBER(data);
+        let buf;
+        if (data instanceof ArrayBuffer) {
+            buf = data;
+        }
+        else if (typeof Buffer !== "undefined" && isBuffer(data)) {
+            buf = new Uint8Array(data).buffer;
+        }
+        else if (ArrayBuffer.isView(data) || data.buffer instanceof ArrayBuffer) {
+            buf = data.buffer;
+        }
+        else {
+            throw new TypeError("Wrong type of 'data' argument");
+        }
+        const asn1Parsed = fromBER(buf);
         if (asn1Parsed.result.error) {
             throw new Error(asn1Parsed.result.error);
         }
@@ -17899,7 +17801,7 @@ class AsnParser {
                     delete asn1Schema[key];
                 }
             }
-            const asn1ComparedSchema = compareSchema({}, asn1Schema, targetSchema);
+            const asn1ComparedSchema = compareSchema(asn1Schema, asn1Schema, targetSchema);
             if (!asn1ComparedSchema.verified) {
                 throw new AsnSchemaValidationError(`Data does not match to ${target.name} ASN1 schema. ${asn1ComparedSchema.result.error}`);
             }
@@ -17917,8 +17819,7 @@ class AsnParser {
                 }
             }
             for (const key in schema.items) {
-                const asn1SchemaValue = asn1ComparedSchema.result[key];
-                if (!asn1SchemaValue) {
+                if (!asn1Schema[key]) {
                     continue;
                 }
                 const schemaItem = schema.items[key];
@@ -17935,16 +17836,16 @@ class AsnParser {
                                 ? Sequence
                                 : Set;
                             const newItem = new Container();
-                            newItem.valueBlock = asn1SchemaValue.valueBlock;
+                            newItem.valueBlock = asn1Schema[key].valueBlock;
                             const value = fromBER(newItem.toBER(false)).result.valueBlock.value;
                             res[key] = Array.from(value, (element) => converter.fromASN(element));
                         }
                         else {
-                            res[key] = Array.from(asn1SchemaValue, (element) => converter.fromASN(element));
+                            res[key] = Array.from(asn1Schema[key], (element) => converter.fromASN(element));
                         }
                     }
                     else {
-                        let value = asn1SchemaValue;
+                        let value = asn1Schema[key];
                         if (schemaItem.implicit) {
                             let newItem;
                             if (isConvertible$1(schemaItem.type)) {
@@ -17966,10 +17867,10 @@ class AsnParser {
                 }
                 else {
                     if (schemaItem.repeated) {
-                        res[key] = Array.from(asn1SchemaValue, (element) => this.fromASN(element, schemaItem.type));
+                        res[key] = Array.from(asn1Schema[key], (element) => this.fromASN(element, schemaItem.type));
                     }
                     else {
-                        res[key] = this.fromASN(asn1SchemaValue, schemaItem.type);
+                        res[key] = this.fromASN(asn1Schema[key], schemaItem.type);
                     }
                 }
             }
@@ -18156,7 +18057,7 @@ OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 PERFORMANCE OF THIS SOFTWARE.
 ***************************************************************************** */
 
-function __decorate(decorators, target, key, desc) {
+function __decorate$1(decorators, target, key, desc) {
     var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
     if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
     else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
@@ -19203,10 +19104,10 @@ let ObjectIdentifier = class ObjectIdentifier {
         }
     }
 };
-__decorate([
+__decorate$1([
     AsnProp({ type: AsnPropTypes.ObjectIdentifier })
 ], ObjectIdentifier.prototype, "value", void 0);
-ObjectIdentifier = __decorate([
+ObjectIdentifier = __decorate$1([
     AsnType({ type: AsnTypeTypes.Choice })
 ], ObjectIdentifier);
 
@@ -19215,12 +19116,12 @@ class AlgorithmIdentifier {
         Object.assign(this, params);
     }
 }
-__decorate([
+__decorate$1([
     AsnProp({
         type: AsnPropTypes.ObjectIdentifier,
     })
 ], AlgorithmIdentifier.prototype, "algorithm", void 0);
-__decorate([
+__decorate$1([
     AsnProp({
         type: AsnPropTypes.Any,
         optional: true,
@@ -19234,16 +19135,16 @@ class PrivateKeyInfo {
         this.privateKey = new ArrayBuffer(0);
     }
 }
-__decorate([
+__decorate$1([
     AsnProp({ type: AsnPropTypes.Integer })
 ], PrivateKeyInfo.prototype, "version", void 0);
-__decorate([
+__decorate$1([
     AsnProp({ type: AlgorithmIdentifier })
 ], PrivateKeyInfo.prototype, "privateKeyAlgorithm", void 0);
-__decorate([
+__decorate$1([
     AsnProp({ type: AsnPropTypes.OctetString })
 ], PrivateKeyInfo.prototype, "privateKey", void 0);
-__decorate([
+__decorate$1([
     AsnProp({ type: AsnPropTypes.Any, optional: true })
 ], PrivateKeyInfo.prototype, "attributes", void 0);
 
@@ -19253,10 +19154,10 @@ class PublicKeyInfo {
         this.publicKey = new ArrayBuffer(0);
     }
 }
-__decorate([
+__decorate$1([
     AsnProp({ type: AlgorithmIdentifier })
 ], PublicKeyInfo.prototype, "publicKeyAlgorithm", void 0);
-__decorate([
+__decorate$1([
     AsnProp({ type: AsnPropTypes.BitString })
 ], PublicKeyInfo.prototype, "publicKey", void 0);
 
@@ -19293,42 +19194,42 @@ class RsaPrivateKey$1 {
         this.coefficient = new ArrayBuffer(0);
     }
 }
-__decorate([
+__decorate$1([
     AsnProp({ type: AsnPropTypes.Integer, converter: AsnIntegerConverter })
 ], RsaPrivateKey$1.prototype, "version", void 0);
-__decorate([
+__decorate$1([
     AsnProp({ type: AsnPropTypes.Integer, converter: AsnIntegerArrayBufferConverter }),
     JsonProp({ name: "n", converter: JsonBase64UrlArrayBufferConverter })
 ], RsaPrivateKey$1.prototype, "modulus", void 0);
-__decorate([
+__decorate$1([
     AsnProp({ type: AsnPropTypes.Integer, converter: AsnIntegerArrayBufferConverter }),
     JsonProp({ name: "e", converter: JsonBase64UrlArrayBufferConverter })
 ], RsaPrivateKey$1.prototype, "publicExponent", void 0);
-__decorate([
+__decorate$1([
     AsnProp({ type: AsnPropTypes.Integer, converter: AsnIntegerArrayBufferConverter }),
     JsonProp({ name: "d", converter: JsonBase64UrlArrayBufferConverter })
 ], RsaPrivateKey$1.prototype, "privateExponent", void 0);
-__decorate([
+__decorate$1([
     AsnProp({ type: AsnPropTypes.Integer, converter: AsnIntegerArrayBufferConverter }),
     JsonProp({ name: "p", converter: JsonBase64UrlArrayBufferConverter })
 ], RsaPrivateKey$1.prototype, "prime1", void 0);
-__decorate([
+__decorate$1([
     AsnProp({ type: AsnPropTypes.Integer, converter: AsnIntegerArrayBufferConverter }),
     JsonProp({ name: "q", converter: JsonBase64UrlArrayBufferConverter })
 ], RsaPrivateKey$1.prototype, "prime2", void 0);
-__decorate([
+__decorate$1([
     AsnProp({ type: AsnPropTypes.Integer, converter: AsnIntegerArrayBufferConverter }),
     JsonProp({ name: "dp", converter: JsonBase64UrlArrayBufferConverter })
 ], RsaPrivateKey$1.prototype, "exponent1", void 0);
-__decorate([
+__decorate$1([
     AsnProp({ type: AsnPropTypes.Integer, converter: AsnIntegerArrayBufferConverter }),
     JsonProp({ name: "dq", converter: JsonBase64UrlArrayBufferConverter })
 ], RsaPrivateKey$1.prototype, "exponent2", void 0);
-__decorate([
+__decorate$1([
     AsnProp({ type: AsnPropTypes.Integer, converter: AsnIntegerArrayBufferConverter }),
     JsonProp({ name: "qi", converter: JsonBase64UrlArrayBufferConverter })
 ], RsaPrivateKey$1.prototype, "coefficient", void 0);
-__decorate([
+__decorate$1([
     AsnProp({ type: AsnPropTypes.Any, optional: true })
 ], RsaPrivateKey$1.prototype, "otherPrimeInfos", void 0);
 
@@ -19338,11 +19239,11 @@ class RsaPublicKey$1 {
         this.publicExponent = new ArrayBuffer(0);
     }
 }
-__decorate([
+__decorate$1([
     AsnProp({ type: AsnPropTypes.Integer, converter: AsnIntegerArrayBufferConverter }),
     JsonProp({ name: "n", converter: JsonBase64UrlArrayBufferConverter })
 ], RsaPublicKey$1.prototype, "modulus", void 0);
-__decorate([
+__decorate$1([
     AsnProp({ type: AsnPropTypes.Integer, converter: AsnIntegerArrayBufferConverter }),
     JsonProp({ name: "e", converter: JsonBase64UrlArrayBufferConverter })
 ], RsaPublicKey$1.prototype, "publicExponent", void 0);
@@ -19382,10 +19283,10 @@ let EcPublicKey$1 = class EcPublicKey {
         return this;
     }
 };
-__decorate([
+__decorate$1([
     AsnProp({ type: AsnPropTypes.OctetString })
 ], EcPublicKey$1.prototype, "value", void 0);
-EcPublicKey$1 = __decorate([
+EcPublicKey$1 = __decorate$1([
     AsnType({ type: AsnTypeTypes.Choice })
 ], EcPublicKey$1);
 
@@ -19415,16 +19316,16 @@ class EcPrivateKey$1 {
         return jwk;
     }
 }
-__decorate([
+__decorate$1([
     AsnProp({ type: AsnPropTypes.Integer, converter: AsnIntegerConverter })
 ], EcPrivateKey$1.prototype, "version", void 0);
-__decorate([
+__decorate$1([
     AsnProp({ type: AsnPropTypes.OctetString })
 ], EcPrivateKey$1.prototype, "privateKey", void 0);
-__decorate([
+__decorate$1([
     AsnProp({ context: 0, type: AsnPropTypes.Any, optional: true })
 ], EcPrivateKey$1.prototype, "parameters", void 0);
-__decorate([
+__decorate$1([
     AsnProp({ context: 1, type: AsnPropTypes.BitString, optional: true })
 ], EcPrivateKey$1.prototype, "publicKey", void 0);
 
@@ -19542,16 +19443,16 @@ class EcDsaSignature {
         return signature.buffer;
     }
 }
-__decorate([
+__decorate$1([
     AsnProp({ type: AsnPropTypes.Integer, converter: AsnIntegerWithoutPaddingConverter })
 ], EcDsaSignature.prototype, "r", void 0);
-__decorate([
+__decorate$1([
     AsnProp({ type: AsnPropTypes.Integer, converter: AsnIntegerWithoutPaddingConverter })
 ], EcDsaSignature.prototype, "s", void 0);
 
 class OneAsymmetricKey extends PrivateKeyInfo {
 }
-__decorate([
+__decorate$1([
     AsnProp({ context: 1, implicit: true, type: AsnPropTypes.BitString, optional: true })
 ], OneAsymmetricKey.prototype, "publicKey", void 0);
 
@@ -19573,10 +19474,10 @@ let EdPrivateKey$1 = class EdPrivateKey {
         return jwk;
     }
 };
-__decorate([
+__decorate$1([
     AsnProp({ type: AsnPropTypes.OctetString })
 ], EdPrivateKey$1.prototype, "value", void 0);
-EdPrivateKey$1 = __decorate([
+EdPrivateKey$1 = __decorate$1([
     AsnType({ type: AsnTypeTypes.Choice })
 ], EdPrivateKey$1);
 
@@ -19601,20 +19502,20 @@ let EdPublicKey$1 = class EdPublicKey {
         return this;
     }
 };
-__decorate([
+__decorate$1([
     AsnProp({ type: AsnPropTypes.BitString })
 ], EdPublicKey$1.prototype, "value", void 0);
-EdPublicKey$1 = __decorate([
+EdPublicKey$1 = __decorate$1([
     AsnType({ type: AsnTypeTypes.Choice })
 ], EdPublicKey$1);
 
 let CurvePrivateKey = class CurvePrivateKey {
 };
-__decorate([
+__decorate$1([
     AsnProp({ type: AsnPropTypes.OctetString }),
     JsonProp({ type: JsonPropTypes.String, converter: JsonBase64UrlArrayBufferConverter })
 ], CurvePrivateKey.prototype, "d", void 0);
-CurvePrivateKey = __decorate([
+CurvePrivateKey = __decorate$1([
     AsnType({ type: AsnTypeTypes.Choice })
 ], CurvePrivateKey);
 
@@ -20088,6 +19989,28 @@ class SubtleCrypto$1 {
             throw new TypeError(`Key is not of type 'CryptoKey'`);
         }
     }
+}
+
+/******************************************************************************
+Copyright (c) Microsoft Corporation.
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
+OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+PERFORMANCE OF THIS SOFTWARE.
+***************************************************************************** */
+
+function __decorate(decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
 }
 
 const JsonBase64UrlConverter = {
