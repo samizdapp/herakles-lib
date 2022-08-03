@@ -136,7 +136,9 @@ class PocketProxy {
     } = lobEnc.decode(Buffer.concat(chunks));
 
     console.log("url?", event, reqObj, reqInit);
-    reqInit = reqObj;
+    if (typeof reqObj !== 'string'){
+      reqInit = reqObj;
+    }
     if (
       reqInit.method &&
       reqInit.method !== "HEAD" &&

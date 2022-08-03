@@ -4497,13 +4497,13 @@ function requireMinimal () {
 
 var writer = Writer$1;
 
-var util$8      = requireMinimal();
+var util$7      = requireMinimal();
 
 var BufferWriter$1; // cyclic
 
-var LongBits$1  = util$8.LongBits,
-    base64    = util$8.base64,
-    utf8$1      = util$8.utf8;
+var LongBits$1  = util$7.LongBits,
+    base64    = util$7.base64,
+    utf8$1      = util$7.utf8;
 
 /**
  * Constructs a new writer operation instance.
@@ -4618,7 +4618,7 @@ function Writer$1() {
 }
 
 var create$1 = function create() {
-    return util$8.Buffer
+    return util$7.Buffer
         ? function create_buffer_setup() {
             return (Writer$1.create = function create_buffer() {
                 return new BufferWriter$1();
@@ -4643,13 +4643,13 @@ Writer$1.create = create$1();
  * @returns {Uint8Array} Buffer
  */
 Writer$1.alloc = function alloc(size) {
-    return new util$8.Array(size);
+    return new util$7.Array(size);
 };
 
 // Use Uint8Array buffer pool in the browser, just like node does with buffers
 /* istanbul ignore else */
-if (util$8.Array !== Array)
-    Writer$1.alloc = util$8.pool(Writer$1.alloc, util$8.Array.prototype.subarray);
+if (util$7.Array !== Array)
+    Writer$1.alloc = util$7.pool(Writer$1.alloc, util$7.Array.prototype.subarray);
 
 /**
  * Pushes a new operation to the queue.
@@ -4839,7 +4839,7 @@ Writer$1.prototype.sfixed64 = Writer$1.prototype.fixed64;
  * @returns {Writer} `this`
  */
 Writer$1.prototype.float = function write_float(value) {
-    return this._push(util$8.float.writeFloatLE, 4, value);
+    return this._push(util$7.float.writeFloatLE, 4, value);
 };
 
 /**
@@ -4849,10 +4849,10 @@ Writer$1.prototype.float = function write_float(value) {
  * @returns {Writer} `this`
  */
 Writer$1.prototype.double = function write_double(value) {
-    return this._push(util$8.float.writeDoubleLE, 8, value);
+    return this._push(util$7.float.writeDoubleLE, 8, value);
 };
 
-var writeBytes = util$8.Array.prototype.set
+var writeBytes = util$7.Array.prototype.set
     ? function writeBytes_set(val, buf, pos) {
         buf.set(val, pos); // also works for plain array values
     }
@@ -4871,7 +4871,7 @@ Writer$1.prototype.bytes = function write_bytes(value) {
     var len = value.length >>> 0;
     if (!len)
         return this._push(writeByte, 1, 0);
-    if (util$8.isString(value)) {
+    if (util$7.isString(value)) {
         var buf = Writer$1.alloc(len = base64.length(value));
         base64.decode(value, buf, 0);
         value = buf;
@@ -4966,7 +4966,7 @@ var writer_buffer = BufferWriter;
 var Writer = writer;
 (BufferWriter.prototype = Object.create(Writer.prototype)).constructor = BufferWriter;
 
-var util$7 = requireMinimal();
+var util$6 = requireMinimal();
 
 /**
  * Constructs a new buffer writer instance.
@@ -4985,9 +4985,9 @@ BufferWriter._configure = function () {
      * @param {number} size Buffer size
      * @returns {Buffer} Buffer
      */
-    BufferWriter.alloc = util$7._Buffer_allocUnsafe;
+    BufferWriter.alloc = util$6._Buffer_allocUnsafe;
 
-    BufferWriter.writeBytesBuffer = util$7.Buffer && util$7.Buffer.prototype instanceof Uint8Array && util$7.Buffer.prototype.set.name === "set"
+    BufferWriter.writeBytesBuffer = util$6.Buffer && util$6.Buffer.prototype instanceof Uint8Array && util$6.Buffer.prototype.set.name === "set"
         ? function writeBytesBuffer_set(val, buf, pos) {
           buf.set(val, pos); // faster than copy (requires node >= 4 where Buffers extend Uint8Array and set is properly inherited)
           // also works for plain array values
@@ -5006,8 +5006,8 @@ BufferWriter._configure = function () {
  * @override
  */
 BufferWriter.prototype.bytes = function write_bytes_buffer(value) {
-    if (util$7.isString(value))
-        value = util$7._Buffer_from(value, "base64");
+    if (util$6.isString(value))
+        value = util$6._Buffer_from(value, "base64");
     var len = value.length >>> 0;
     this.uint32(len);
     if (len)
@@ -5017,7 +5017,7 @@ BufferWriter.prototype.bytes = function write_bytes_buffer(value) {
 
 function writeStringBuffer(val, buf, pos) {
     if (val.length < 40) // plain js is faster for short strings (probably due to redundant assertions)
-        util$7.utf8.write(val, buf, pos);
+        util$6.utf8.write(val, buf, pos);
     else if (buf.utf8Write)
         buf.utf8Write(val, pos);
     else
@@ -5028,7 +5028,7 @@ function writeStringBuffer(val, buf, pos) {
  * @override
  */
 BufferWriter.prototype.string = function write_string_buffer(value) {
-    var len = util$7.Buffer.byteLength(value);
+    var len = util$6.Buffer.byteLength(value);
     this.uint32(len);
     if (len)
         this._push(writeStringBuffer, len, value);
@@ -5047,12 +5047,12 @@ BufferWriter._configure();
 
 var reader = Reader$1;
 
-var util$6      = requireMinimal();
+var util$5      = requireMinimal();
 
 var BufferReader$1; // cyclic
 
-var LongBits  = util$6.LongBits,
-    utf8      = util$6.utf8;
+var LongBits  = util$5.LongBits,
+    utf8      = util$5.utf8;
 
 /* istanbul ignore next */
 function indexOutOfRange(reader, writeLength) {
@@ -5100,10 +5100,10 @@ var create_array = typeof Uint8Array !== "undefined"
     };
 
 var create = function create() {
-    return util$6.Buffer
+    return util$5.Buffer
         ? function create_buffer_setup(buffer) {
             return (Reader$1.create = function create_buffer(buffer) {
-                return util$6.Buffer.isBuffer(buffer)
+                return util$5.Buffer.isBuffer(buffer)
                     ? new BufferReader$1(buffer)
                     /* istanbul ignore next */
                     : create_array(buffer);
@@ -5122,7 +5122,7 @@ var create = function create() {
  */
 Reader$1.create = create();
 
-Reader$1.prototype._slice = util$6.Array.prototype.subarray || /* istanbul ignore next */ util$6.Array.prototype.slice;
+Reader$1.prototype._slice = util$5.Array.prototype.subarray || /* istanbul ignore next */ util$5.Array.prototype.slice;
 
 /**
  * Reads a varint as an unsigned 32 bit value.
@@ -5321,7 +5321,7 @@ Reader$1.prototype.float = function read_float() {
     if (this.pos + 4 > this.len)
         throw indexOutOfRange(this, 4);
 
-    var value = util$6.float.readFloatLE(this.buf, this.pos);
+    var value = util$5.float.readFloatLE(this.buf, this.pos);
     this.pos += 4;
     return value;
 };
@@ -5337,7 +5337,7 @@ Reader$1.prototype.double = function read_double() {
     if (this.pos + 8 > this.len)
         throw indexOutOfRange(this, 4);
 
-    var value = util$6.float.readDoubleLE(this.buf, this.pos);
+    var value = util$5.float.readDoubleLE(this.buf, this.pos);
     this.pos += 8;
     return value;
 };
@@ -5430,8 +5430,8 @@ Reader$1._configure = function(BufferReader_) {
     Reader$1.create = create();
     BufferReader$1._configure();
 
-    var fn = util$6.Long ? "toLong" : /* istanbul ignore next */ "toNumber";
-    util$6.merge(Reader$1.prototype, {
+    var fn = util$5.Long ? "toLong" : /* istanbul ignore next */ "toNumber";
+    util$5.merge(Reader$1.prototype, {
 
         int64: function read_int64() {
             return readLongVarint.call(this)[fn](false);
@@ -5462,7 +5462,7 @@ var reader_buffer = BufferReader;
 var Reader = reader;
 (BufferReader.prototype = Object.create(Reader.prototype)).constructor = BufferReader;
 
-var util$5 = requireMinimal();
+var util$4 = requireMinimal();
 
 /**
  * Constructs a new buffer reader instance.
@@ -5483,8 +5483,8 @@ function BufferReader(buffer) {
 
 BufferReader._configure = function () {
     /* istanbul ignore else */
-    if (util$5.Buffer)
-        BufferReader.prototype._slice = util$5.Buffer.prototype.slice;
+    if (util$4.Buffer)
+        BufferReader.prototype._slice = util$4.Buffer.prototype.slice;
 };
 
 
@@ -5511,10 +5511,10 @@ var rpc = {};
 
 var service$1 = Service$1;
 
-var util$4 = requireMinimal();
+var util$3 = requireMinimal();
 
 // Extends EventEmitter
-(Service$1.prototype = Object.create(util$4.EventEmitter.prototype)).constructor = Service$1;
+(Service$1.prototype = Object.create(util$3.EventEmitter.prototype)).constructor = Service$1;
 
 /**
  * A service method callback as used by {@link rpc.ServiceMethod|ServiceMethod}.
@@ -5554,7 +5554,7 @@ function Service$1(rpcImpl, requestDelimited, responseDelimited) {
     if (typeof rpcImpl !== "function")
         throw TypeError("rpcImpl must be a function");
 
-    util$4.EventEmitter.call(this);
+    util$3.EventEmitter.call(this);
 
     /**
      * RPC implementation. Becomes `null` once the service is ended.
@@ -5593,7 +5593,7 @@ Service$1.prototype.rpcCall = function rpcCall(method, requestCtor, responseCtor
 
     var self = this;
     if (!callback)
-        return util$4.asPromise(rpcCall, self, method, requestCtor, responseCtor, request);
+        return util$3.asPromise(rpcCall, self, method, requestCtor, responseCtor, request);
 
     if (!self.rpcImpl) {
         setTimeout(function() { callback(Error("already ended")); }, 0);
@@ -5729,7 +5729,7 @@ var roots = {};
 	configure();
 } (indexMinimal));
 
-var util$3 = {exports: {}};
+var util$2 = {exports: {}};
 
 var codegen_1;
 var hasRequiredCodegen;
@@ -7413,165 +7413,173 @@ function requireMapfield () {
 	return mapfield;
 }
 
-var method = Method$1;
+var method;
+var hasRequiredMethod;
 
-// extends ReflectionObject
-var ReflectionObject = requireObject();
-((Method$1.prototype = Object.create(ReflectionObject.prototype)).constructor = Method$1).className = "Method";
+function requireMethod () {
+	if (hasRequiredMethod) return method;
+	hasRequiredMethod = 1;
+	method = Method;
 
-var util$2 = requireUtil();
+	// extends ReflectionObject
+	var ReflectionObject = requireObject();
+	((Method.prototype = Object.create(ReflectionObject.prototype)).constructor = Method).className = "Method";
 
-/**
- * Constructs a new service method instance.
- * @classdesc Reflected service method.
- * @extends ReflectionObject
- * @constructor
- * @param {string} name Method name
- * @param {string|undefined} type Method type, usually `"rpc"`
- * @param {string} requestType Request message type
- * @param {string} responseType Response message type
- * @param {boolean|Object.<string,*>} [requestStream] Whether the request is streamed
- * @param {boolean|Object.<string,*>} [responseStream] Whether the response is streamed
- * @param {Object.<string,*>} [options] Declared options
- * @param {string} [comment] The comment for this method
- * @param {Object.<string,*>} [parsedOptions] Declared options, properly parsed into an object
- */
-function Method$1(name, type, requestType, responseType, requestStream, responseStream, options, comment, parsedOptions) {
+	var util = requireUtil();
 
-    /* istanbul ignore next */
-    if (util$2.isObject(requestStream)) {
-        options = requestStream;
-        requestStream = responseStream = undefined;
-    } else if (util$2.isObject(responseStream)) {
-        options = responseStream;
-        responseStream = undefined;
-    }
+	/**
+	 * Constructs a new service method instance.
+	 * @classdesc Reflected service method.
+	 * @extends ReflectionObject
+	 * @constructor
+	 * @param {string} name Method name
+	 * @param {string|undefined} type Method type, usually `"rpc"`
+	 * @param {string} requestType Request message type
+	 * @param {string} responseType Response message type
+	 * @param {boolean|Object.<string,*>} [requestStream] Whether the request is streamed
+	 * @param {boolean|Object.<string,*>} [responseStream] Whether the response is streamed
+	 * @param {Object.<string,*>} [options] Declared options
+	 * @param {string} [comment] The comment for this method
+	 * @param {Object.<string,*>} [parsedOptions] Declared options, properly parsed into an object
+	 */
+	function Method(name, type, requestType, responseType, requestStream, responseStream, options, comment, parsedOptions) {
 
-    /* istanbul ignore if */
-    if (!(type === undefined || util$2.isString(type)))
-        throw TypeError("type must be a string");
+	    /* istanbul ignore next */
+	    if (util.isObject(requestStream)) {
+	        options = requestStream;
+	        requestStream = responseStream = undefined;
+	    } else if (util.isObject(responseStream)) {
+	        options = responseStream;
+	        responseStream = undefined;
+	    }
 
-    /* istanbul ignore if */
-    if (!util$2.isString(requestType))
-        throw TypeError("requestType must be a string");
+	    /* istanbul ignore if */
+	    if (!(type === undefined || util.isString(type)))
+	        throw TypeError("type must be a string");
 
-    /* istanbul ignore if */
-    if (!util$2.isString(responseType))
-        throw TypeError("responseType must be a string");
+	    /* istanbul ignore if */
+	    if (!util.isString(requestType))
+	        throw TypeError("requestType must be a string");
 
-    ReflectionObject.call(this, name, options);
+	    /* istanbul ignore if */
+	    if (!util.isString(responseType))
+	        throw TypeError("responseType must be a string");
 
-    /**
-     * Method type.
-     * @type {string}
-     */
-    this.type = type || "rpc"; // toJSON
+	    ReflectionObject.call(this, name, options);
 
-    /**
-     * Request type.
-     * @type {string}
-     */
-    this.requestType = requestType; // toJSON, marker
+	    /**
+	     * Method type.
+	     * @type {string}
+	     */
+	    this.type = type || "rpc"; // toJSON
 
-    /**
-     * Whether requests are streamed or not.
-     * @type {boolean|undefined}
-     */
-    this.requestStream = requestStream ? true : undefined; // toJSON
+	    /**
+	     * Request type.
+	     * @type {string}
+	     */
+	    this.requestType = requestType; // toJSON, marker
 
-    /**
-     * Response type.
-     * @type {string}
-     */
-    this.responseType = responseType; // toJSON
+	    /**
+	     * Whether requests are streamed or not.
+	     * @type {boolean|undefined}
+	     */
+	    this.requestStream = requestStream ? true : undefined; // toJSON
 
-    /**
-     * Whether responses are streamed or not.
-     * @type {boolean|undefined}
-     */
-    this.responseStream = responseStream ? true : undefined; // toJSON
+	    /**
+	     * Response type.
+	     * @type {string}
+	     */
+	    this.responseType = responseType; // toJSON
 
-    /**
-     * Resolved request type.
-     * @type {Type|null}
-     */
-    this.resolvedRequestType = null;
+	    /**
+	     * Whether responses are streamed or not.
+	     * @type {boolean|undefined}
+	     */
+	    this.responseStream = responseStream ? true : undefined; // toJSON
 
-    /**
-     * Resolved response type.
-     * @type {Type|null}
-     */
-    this.resolvedResponseType = null;
+	    /**
+	     * Resolved request type.
+	     * @type {Type|null}
+	     */
+	    this.resolvedRequestType = null;
 
-    /**
-     * Comment for this method
-     * @type {string|null}
-     */
-    this.comment = comment;
+	    /**
+	     * Resolved response type.
+	     * @type {Type|null}
+	     */
+	    this.resolvedResponseType = null;
 
-    /**
-     * Options properly parsed into an object
-     */
-    this.parsedOptions = parsedOptions;
+	    /**
+	     * Comment for this method
+	     * @type {string|null}
+	     */
+	    this.comment = comment;
+
+	    /**
+	     * Options properly parsed into an object
+	     */
+	    this.parsedOptions = parsedOptions;
+	}
+
+	/**
+	 * Method descriptor.
+	 * @interface IMethod
+	 * @property {string} [type="rpc"] Method type
+	 * @property {string} requestType Request type
+	 * @property {string} responseType Response type
+	 * @property {boolean} [requestStream=false] Whether requests are streamed
+	 * @property {boolean} [responseStream=false] Whether responses are streamed
+	 * @property {Object.<string,*>} [options] Method options
+	 * @property {string} comment Method comments
+	 * @property {Object.<string,*>} [parsedOptions] Method options properly parsed into an object
+	 */
+
+	/**
+	 * Constructs a method from a method descriptor.
+	 * @param {string} name Method name
+	 * @param {IMethod} json Method descriptor
+	 * @returns {Method} Created method
+	 * @throws {TypeError} If arguments are invalid
+	 */
+	Method.fromJSON = function fromJSON(name, json) {
+	    return new Method(name, json.type, json.requestType, json.responseType, json.requestStream, json.responseStream, json.options, json.comment, json.parsedOptions);
+	};
+
+	/**
+	 * Converts this method to a method descriptor.
+	 * @param {IToJSONOptions} [toJSONOptions] JSON conversion options
+	 * @returns {IMethod} Method descriptor
+	 */
+	Method.prototype.toJSON = function toJSON(toJSONOptions) {
+	    var keepComments = toJSONOptions ? Boolean(toJSONOptions.keepComments) : false;
+	    return util.toObject([
+	        "type"           , this.type !== "rpc" && /* istanbul ignore next */ this.type || undefined,
+	        "requestType"    , this.requestType,
+	        "requestStream"  , this.requestStream,
+	        "responseType"   , this.responseType,
+	        "responseStream" , this.responseStream,
+	        "options"        , this.options,
+	        "comment"        , keepComments ? this.comment : undefined,
+	        "parsedOptions"  , this.parsedOptions,
+	    ]);
+	};
+
+	/**
+	 * @override
+	 */
+	Method.prototype.resolve = function resolve() {
+
+	    /* istanbul ignore if */
+	    if (this.resolved)
+	        return this;
+
+	    this.resolvedRequestType = this.parent.lookupType(this.requestType);
+	    this.resolvedResponseType = this.parent.lookupType(this.responseType);
+
+	    return ReflectionObject.prototype.resolve.call(this);
+	};
+	return method;
 }
-
-/**
- * Method descriptor.
- * @interface IMethod
- * @property {string} [type="rpc"] Method type
- * @property {string} requestType Request type
- * @property {string} responseType Response type
- * @property {boolean} [requestStream=false] Whether requests are streamed
- * @property {boolean} [responseStream=false] Whether responses are streamed
- * @property {Object.<string,*>} [options] Method options
- * @property {string} comment Method comments
- * @property {Object.<string,*>} [parsedOptions] Method options properly parsed into an object
- */
-
-/**
- * Constructs a method from a method descriptor.
- * @param {string} name Method name
- * @param {IMethod} json Method descriptor
- * @returns {Method} Created method
- * @throws {TypeError} If arguments are invalid
- */
-Method$1.fromJSON = function fromJSON(name, json) {
-    return new Method$1(name, json.type, json.requestType, json.responseType, json.requestStream, json.responseStream, json.options, json.comment, json.parsedOptions);
-};
-
-/**
- * Converts this method to a method descriptor.
- * @param {IToJSONOptions} [toJSONOptions] JSON conversion options
- * @returns {IMethod} Method descriptor
- */
-Method$1.prototype.toJSON = function toJSON(toJSONOptions) {
-    var keepComments = toJSONOptions ? Boolean(toJSONOptions.keepComments) : false;
-    return util$2.toObject([
-        "type"           , this.type !== "rpc" && /* istanbul ignore next */ this.type || undefined,
-        "requestType"    , this.requestType,
-        "requestStream"  , this.requestStream,
-        "responseType"   , this.responseType,
-        "responseStream" , this.responseStream,
-        "options"        , this.options,
-        "comment"        , keepComments ? this.comment : undefined,
-        "parsedOptions"  , this.parsedOptions,
-    ]);
-};
-
-/**
- * @override
- */
-Method$1.prototype.resolve = function resolve() {
-
-    /* istanbul ignore if */
-    if (this.resolved)
-        return this;
-
-    this.resolvedRequestType = this.parent.lookupType(this.requestType);
-    this.resolvedResponseType = this.parent.lookupType(this.responseType);
-
-    return ReflectionObject.prototype.resolve.call(this);
-};
 
 var service;
 var hasRequiredService;
@@ -7585,7 +7593,7 @@ function requireService () {
 	var Namespace = requireNamespace();
 	((Service.prototype = Object.create(Namespace.prototype)).constructor = Service).className = "Service";
 
-	var Method = method,
+	var Method = requireMethod(),
 	    util   = requireUtil(),
 	    rpc$1    = rpc;
 
@@ -9587,7 +9595,7 @@ function requireRoot () {
 var hasRequiredUtil;
 
 function requireUtil () {
-	if (hasRequiredUtil) return util$3.exports;
+	if (hasRequiredUtil) return util$2.exports;
 	hasRequiredUtil = 1;
 	(function (module) {
 
@@ -9801,8 +9809,8 @@ function requireUtil () {
 		        return roots$1["decorated"] || (roots$1["decorated"] = new (requireRoot())());
 		    }
 		});
-} (util$3));
-	return util$3.exports;
+} (util$2));
+	return util$2.exports;
 }
 
 var object;
@@ -10442,7 +10450,7 @@ function requireEncoder () {
 	protobuf.OneOf            = requireOneof();
 	protobuf.MapField         = requireMapfield();
 	protobuf.Service          = requireService();
-	protobuf.Method           = method;
+	protobuf.Method           = requireMethod();
 
 	// Runtime
 	protobuf.Message          = message;
@@ -10875,7 +10883,7 @@ var tokenize  = tokenize_1,
     OneOf     = requireOneof(),
     Enum      = require_enum(),
     Service   = requireService(),
-    Method    = method,
+    Method    = requireMethod(),
     types     = requireTypes(),
     util      = requireUtil();
 
