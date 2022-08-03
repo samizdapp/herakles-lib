@@ -135,18 +135,32 @@ export default class PocketProxy {
     } = decode(Buffer.concat(chunks));
 
     console.log("url?", event, reqObj, reqInit);
-    if (typeof reqObj !== 'string'){
+    let fres, url, init;
+    console.log("set body", body ? body.toString() : "");
+    if (typeof reqObj === "string" && !reqObj.startsWith("http")) {
+      url = `http://localhost:5000${reqObj}`;
+      if (
+        reqInit.method &&
+        reqInit.method !== "HEAD" &&
+        reqInit.method !== "GET"
+      ) {
+        reqInit.body = body;
+      }
+      init = reqInit
+    } else if (typeof reqObj !== 'string'){
       reqInit = reqObj;
+      url = reqObj.url
+      if (
+        reqObj.method &&
+        reqObj.method !== "HEAD" &&
+        reqObj.method !== "GET"
+      ) {
+        reqObj.body = body;
+      }
+      init = reqObj
     }
-    if (
-      reqInit.method &&
-      reqInit.method !== "HEAD" &&
-      reqInit.method !== "GET"
-    ) {
-      console.log("set body", body ? body.toString() : "");
-      reqObj.body = body;
-    }
-    const fres = await fetch(reqObj.url, reqObj);
+
+    fres = await fetch(url, init);
     const resb = await fres.arrayBuffer();
     const res = getResponseJSON(fres);
     const forward = encode({ res, lan, wan }, Buffer.from(resb));

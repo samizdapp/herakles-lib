@@ -23696,7 +23696,9 @@ class PocketClient {
   }
 
   patchFetchArgs(_reqObj, _reqInit) {
-    if (typeof reqObj === "string" && reqObj.startsWith("http")) {
+    if (typeof _reqObj === "string" && _reqObj.startsWith("http")) {
+      const reqObj = _reqObj;
+      const reqInit = _reqInit;
       const url = new URL(reqObj);
       reqInit.headers = reqInit.headers || {};
       reqInit.headers["X-Intercepted-Subdomain"] = url.hostname;
@@ -23845,6 +23847,7 @@ class PocketClient {
 
   async patchFetchBrowser() {
     this._fetch = window.fetch.bind(window);
+    this._host = `${self.location.hostname}:${this._port}`;
     window.fetch = this.pocketFetch.bind(this);
 
     this.patchXHR();
