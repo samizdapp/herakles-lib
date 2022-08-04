@@ -23686,6 +23686,7 @@ class PocketClient {
     this._job = Promise.resolve();
     this._lastAddress = host;
     this._pending = new Set();
+    this.subdomain = 'pleroma'; //TODO make configurable
   }
 
   async init() {
@@ -23704,9 +23705,9 @@ class PocketClient {
   }
 
   patchFetchArgs(_reqObj, _reqInit) {
-    if (typeof _reqObj === "string" && _reqObj.startsWith("http")) {
-      const reqObj = _reqObj;
-      const reqInit = _reqInit;
+    if (typeof _reqObj === "string") {
+      let reqObj = _reqObj;
+      let reqInit = _reqInit;
       if (_reqObj.startsWith('http')){
         const url = new URL(reqObj);
         if (url.host === getHost()) {
@@ -23720,22 +23721,21 @@ class PocketClient {
         reqObj = `http://localhost${reqObj}`;
       }
       reqInit.headers = reqInit.headers || {};
-      for (var pair of reqInit.headers.entries()) {
-        reqInit.headers[pair[0]] = pair[1];
-        console.log(pair[0] + ": " + pair[1]);
+      if (reqInit.headers.entries){
+        for (var pair of reqInit.headers.entries()) {
+          reqInit.headers[pair[0]] = pair[1];
+          console.log(pair[0] + ": " + pair[1]);
+        }
       }
+
       reqInit.headers["X-Intercepted-Subdomain"] = this.subdomain;
       return {reqObj, reqInit}
     }
     // if (typeof _reqObj === "string" && _reqObj.startsWith("http")) {
     console.log("patch");
-    const url = new URL(_reqObj.url);
+    const url = new URL(_reqObj.url.startsWith('http') ? _reqObj.url : `http://localhost${_reqObj.url}`);
     _reqInit.headers = _reqObj.headers || {};
-    const pathParts = url.pathname.split("/").filter((_) => _);
-    if (pathParts[0] === "harnessed") {
-      _reqInit.headers["X-Intercepted-Subdomain"] = pathParts[1];
-      this.subdomain = pathParts[1];
-    } else if (this.subdomain && url.pathname !== '/manifest.json') {
+    if (url.pathname !== '/manifest.json') {
       _reqInit.headers["X-Intercepted-Subdomain"] = this.subdomain;
     }
 
@@ -23790,7 +23790,11 @@ class PocketClient {
     // this._job = this._job.then(async () => {
     console.log("pocketFetch", xhr, reqObj, reqInit);
     const patched = this.patchFetchArgs(reqObj, reqInit);
-    const body = reqObj.body || reqInit.body || (await reqObj.arrayBuffer());
+    const body = reqObj.body ? reqObj.body 
+               : reqInit.body ? reqInit.body 
+               : reqObj.arrayBuffer ?  (await reqObj.arrayBuffer()) 
+               : null;
+
     reqObj = patched.reqObj;
     reqInit = patched.reqInit;
     console.log("pocketFetch2", reqObj, reqInit, body);
@@ -23882,17 +23886,32 @@ class PocketClient {
 
   patchXHR() {
     const _open = XMLHttpRequest.prototype.open;
+    const _setRequestHeader = XMLHttpRequest.prototype.setRequestHeader;
+    XMLHttpRequest.prototype.setRequestHeader = function (name, value) {
+      if (!this._headers){
+        Object.defineProperties(this, {
+          _headers: {
+            value: {},
+            writable: true
+          }
+        });
+      }
+
+      this._headers[name] = value;
+      return _setRequestHeader.bind(this)(name, value)
+    };
     XMLHttpRequest.prototype.open = function (method, url) {
       this._method = method;
       this._url = url;
       return _open.bind(this)(method, url);
     };
+
     XMLHttpRequest.prototype.send = async function (body) {
       try {
         console.log("xhr.send", this);
         const url = this._url;
         const method = this._method;
-        const init = { method };
+        const init = { method, headers: this._headers || {} };
         if (body) init.body = body;
         const res = await fetch(url, init, this);
         console.log("got res", res);
@@ -23919,11 +23938,12 @@ class PocketClient {
           },
           getAllResponseHeaders: {
             value: () => {
-              let res = [];
-              for (const pair of res.headers.entries) {
-                res.push(`${pair[0]}: ${pair[1]}`);
+              let _res = [];
+              console.log('res.headers', res.headers);
+              for (const pair of res.headers.entries()) {
+                _res.push(`${pair[0]}: ${pair[1]}`);
               }
-              return res.join("\r\n");
+              return _res.join("\r\n");
             },
           },
         });

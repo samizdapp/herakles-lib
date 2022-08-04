@@ -134,11 +134,11 @@ export default class PocketProxy {
       body,
     } = decode(Buffer.concat(chunks));
 
-    console.log("url?", event, reqObj, reqInit);
+    // console.log("url?", event, reqObj, reqInit);
     let fres, url, init;
-    console.log("set body", body ? body.toString() : "");
-    if (typeof reqObj === "string" && !reqObj.startsWith("http")) {
-      url = `http://localhost:5000${reqObj}`;
+    // console.log("set body", body ? body.toString() : "");
+    if (typeof reqObj === "string") {
+      url = reqObj.startsWith("http") ? reqObj : `http://localhost${reqObj}`;
       if (
         reqInit.method &&
         reqInit.method !== "HEAD" &&
@@ -160,7 +160,7 @@ export default class PocketProxy {
       init = reqObj
     }
 
-    console.log('do fetch', url, init)
+    console.log('do fetch', url)//, init, init.body ? init.body : '')
     fres = await fetch(url, init);
     const resb = await fres.arrayBuffer();
     const res = getResponseJSON(fres);
