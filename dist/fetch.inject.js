@@ -23721,8 +23721,8 @@
 
     patchFetchArgs(_reqObj, _reqInit) {
       if (typeof _reqObj === "string") {
-        let reqObj = _reqObj;
-        let reqInit = _reqInit;
+        let reqObj;
+        let reqInit = _reqInit || {};
         if (_reqObj.startsWith('http')){
           const url = new URL(reqObj);
           if (url.host === getHost()) {
