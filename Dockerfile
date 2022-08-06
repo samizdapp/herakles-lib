@@ -14,4 +14,4 @@ COPY ./watch_hosts.sh ./watch_hosts.sh
 RUN apt-get update
 RUN apt-get install inotify-tools -y
 
-CMD [ "./start.sh" ]
+CMD [ "sh", "./start.sh" ]
