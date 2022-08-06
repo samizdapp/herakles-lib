@@ -23709,7 +23709,7 @@ class PocketClient {
       let reqObj;
       let reqInit = _reqInit || {};
       if (_reqObj.startsWith('http')){
-        const url = new URL(reqObj);
+        const url = new URL(_reqObj);
         if (url.host === getHost()) {
           console.log("subdomain", _reqInit);
           url.host = "localhost";
