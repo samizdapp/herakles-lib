@@ -88,7 +88,7 @@ export default class PocketProxy {
       eventEmitter.on("route", (event) => {
         console.log("got route event?", event);
         this.handleEvent(messaging, event).catch((e) => {
-          console.log(e);
+          console.log('caught error',e);
         });
       });
 
