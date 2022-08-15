@@ -23649,7 +23649,9 @@
 
     getAddresses() {
       const lanwan = Array.from(this._addresses);
-      return lanwan.length ? lanwan : [`${this._host}:${this._port}`];
+      return lanwan.concat([`${this._host}:${this._port}`])
+      // const domain = [`${this._host}:${this._port}`]
+      // return lanwan.length ? lanwan.concat : domain;
     }
 
     async connect(address, attempt) {
