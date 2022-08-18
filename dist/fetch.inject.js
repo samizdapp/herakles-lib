@@ -23553,7 +23553,11 @@
           // alert(`closed ${address}`);
         });
 
-        _client.connect();
+        try {
+          _client.connect();
+        } catch (e){
+          reject(e);
+        }
       });
     }
 
@@ -23599,7 +23603,7 @@
 
     getAddresses() {
       const lanwan = Array.from(this._addresses);
-      return lanwan.concat([`${this._host}:${this._port}`,`http://setup.local:${this._port}`,`http://setup.localhost:${this._port}`])
+      return lanwan.concat([`${this._host}:${this._port}`,`setup.local:${this._port}`,`setup.localhost:${this._port}`])
       // const domain = [`${this._host}:${this._port}`]
       // return lanwan.length ? lanwan.concat : domain;
     }
