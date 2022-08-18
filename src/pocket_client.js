@@ -7,6 +7,7 @@ import {
   genKeyPair,
   HandshakeAsClient,
 } from "pocket-messaging";
+import localforage from "localforage";
 
 const CHUNK_SIZE = 65535;
 
@@ -22,11 +23,22 @@ function randomRoute() {
   return r;
 }
 
-const getHost = () => {
+const getWSAddress = async () => {
+  const {address} = (await localforage.getItem('mdns')) || {}
+  if (address) return address;
+
   try {
     return window.location.hostname
   } catch(e){
     return self.location.hostname
+  }
+}
+
+const getHost = () => {
+  try {
+    return window.location.host
+  } catch(e){
+    return self.location.host
   }
 }
 
@@ -166,7 +178,7 @@ class ClientManager {
 
   async raceNewClients() {
     return Promise.race(
-      this.getAddresses().map((address) =>
+      (await this.getAddresses()).map((address) =>
         this.createClient(address).catch((e) => {
           console.debug("failed to get client for ".address);
           console.debug(e);
@@ -204,9 +216,9 @@ class ClientManager {
   //   return this._client;
   // }
 
-  getAddresses() {
+  async getAddresses() {
     const lanwan = Array.from(this._addresses);
-    return lanwan.concat([`${this._host}:${this._port}`,`setup.local:${this._port}`,`setup.localhost:${this._port}`])
+    return lanwan.concat([`${await getWSAddress()}:${this._port}`,`setup.local:${this._port}`,`setup.localhost:${this._port}`])
     // const domain = [`${this._host}:${this._port}`]
     // return lanwan.length ? lanwan.concat : domain;
   }
