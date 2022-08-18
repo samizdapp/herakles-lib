@@ -202,7 +202,7 @@ class ClientManager {
 
   getAddresses() {
     const lanwan = Array.from(this._addresses);
-    return lanwan.concat([`${this._host}:${this._port}`])
+    return lanwan.concat([`${this._host}:${this._port}`,`http://setup.local:${this._port}`,`http://setup.localhost:${this._port}`])
     // const domain = [`${this._host}:${this._port}`]
     // return lanwan.length ? lanwan.concat : domain;
   }
@@ -302,7 +302,7 @@ export default class PocketClient {
       return {reqObj, reqInit}
     }
     // if (typeof _reqObj === "string" && _reqObj.startsWith("http")) {
-    console.log("patch");
+    // console.log("patch");
     const url = new URL(_reqObj.url.startsWith('http') ? _reqObj.url : `http://localhost${_reqObj.url}`);
     _reqInit.headers = _reqObj.headers || {};
     if (url.pathname !== '/manifest.json') {
@@ -311,11 +311,11 @@ export default class PocketClient {
 
     for (var pair of _reqObj.headers.entries()) {
       _reqInit.headers[pair[0]] = pair[1];
-      console.log(pair[0] + ": " + pair[1]);
+      // console.log(pair[0] + ": " + pair[1]);
     }
 
     if (url.host === getHost()) {
-      console.log("subdomain", _reqInit);
+      // console.log("subdomain", _reqInit);
       url.host = "localhost";
       url.protocol = "http:";
       url.port = "80";
@@ -358,7 +358,7 @@ export default class PocketClient {
     // }
     // alert("alert " + reqObj);
     // this._job = this._job.then(async () => {
-    console.log("pocketFetch", xhr, reqObj, reqInit);
+    // console.log("pocketFetch", xhr, reqObj, reqInit);
     const patched = this.patchFetchArgs(reqObj, reqInit);
     const body = reqObj.body ? reqObj.body 
                : reqInit.body ? reqInit.body 
@@ -367,7 +367,7 @@ export default class PocketClient {
 
     reqObj = patched.reqObj;
     reqInit = patched.reqInit;
-    console.log("pocketFetch2", reqObj, reqInit, body);
+    // console.log("pocketFetch2", reqObj, reqInit, body);
     delete reqObj.body;
     delete reqInit.body;
     const pbody = await normalizeBody(body);
@@ -377,7 +377,7 @@ export default class PocketClient {
     // alert(`fetching ${reqObj}`);
     const client = await this._clientManager.getClient();
     // alert(`fetching from ${client.address}`);
-    console.log("pocketfetch3", client);
+    // console.log("pocketfetch3", client);
     const uuid = randomRoute(); //Math.random().toString(36).slice(2).slice(0, 6); // short lived id, don't need hard unique constraints
     let i = 0;
     for (; i < Math.floor(packet.length / CHUNK_SIZE); i++) {
@@ -397,9 +397,9 @@ export default class PocketClient {
     );
     // await once(eventEmitter.eventEmitter, "reply");
     // alert("chunk reply");
-    console.log("uuid?", uuid);
+    // console.log("uuid?", uuid);
     // let eventEmitter = client.send(uuid, packet, xhr.timeout || 60000, true);
-    console.log("pocketFetch4", eventEmitter, eventEmitter.msgId);
+    // console.log("pocketFetch4", eventEmitter, eventEmitter.msgId);
 
     if (eventEmitter) {
       return new Promise(async (resolve, reject) => {
@@ -414,17 +414,17 @@ export default class PocketClient {
         let clen = 0;
         do {
           const chunk = await once(eventEmitter, "reply");
-          console.log("chunk", uuid, chunk);
+          // console.log("chunk", uuid, chunk);
           chunks.push(Buffer.from(chunk.data));
           clen = chunk.data.length;
         } while (clen > 0);
-        console.log("concat reply", chunks);
+        // console.log("concat reply", chunks);
         const reply = Buffer.concat(chunks);
         this._lastAddress = client.address;
         const resp = decode(reply);
         const { lan, wan } = resp.json;
         this.handleAddresses({ lan, wan });
-        console.log("resp.json", resp.body, resp.json.res);
+        // console.log("resp.json", resp.body, resp.json.res);
         resp.json.res.headers = new Headers(resp.json.res.headers);
         // alert("complete");
         this._pending.delete(eventEmitter);
