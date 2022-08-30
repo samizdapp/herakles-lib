@@ -162,9 +162,14 @@ class PocketProxy {
     }
 
     console.log('do fetch', url);//, init, init.body ? init.body : '')
-    fres = await fetch__default["default"](url, init).catch(e => {
+    fres = await fetch__default["default"](url, init).catch(error => {
+      const responsePacket = lobEnc.encode({error},Buffer.from(error?.toString ? error.toString() : 'unknown error'));
+      messaging.send(event.fromMsgId, responsePacket);
       return null;
     });
+    if (!fres){
+      return;
+    }
     const resb = await fres.arrayBuffer();
     const res = getResponseJSON(fres);
     const forward = lobEnc.encode({ res, lan, wan }, Buffer.from(resb));

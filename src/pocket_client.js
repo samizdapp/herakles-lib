@@ -117,7 +117,7 @@ class ClientManager {
         client.alive = async () => {
           console.log("send keepalive");
           const timeout = new Promise((r) =>
-            setTimeout(() => r("timeout"), 5000)
+            setTimeout(() => r("timeout"), 1000)
           );
           const sendres = client.send(
             "ping",
@@ -430,6 +430,7 @@ export default class PocketClient {
         let clen = 0;
         do {
           const chunk = await once(eventEmitter, "reply");
+          const buf = Buffer.from(chunk.data);
           // console.log("chunk", uuid, chunk);
           chunks.push(Buffer.from(chunk.data));
           clen = chunk.data.length;
@@ -438,12 +439,16 @@ export default class PocketClient {
         const reply = Buffer.concat(chunks);
         this._lastAddress = client.address;
         const resp = decode(reply);
-        const { lan, wan } = resp.json;
+        const { lan, wan, error } = resp.json;
+        this._pending.delete(eventEmitter);
+
+        if (error){
+          return reject(new Error(resp.body.toString()))
+        }
         this.handleAddresses({ lan, wan });
         // console.log("resp.json", resp.body, resp.json.res);
         resp.json.res.headers = new Headers(resp.json.res.headers);
         // alert("complete");
-        this._pending.delete(eventEmitter);
         resolve(new Response(resp.body, resp.json.res));
       });
     } else {
