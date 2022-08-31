@@ -163,6 +163,7 @@ class PocketProxy {
 
     console.log('do fetch', url);//, init, init.body ? init.body : '')
     fres = await fetch__default["default"](url, init).catch(error => {
+      console.log('proxy downstream error', error);
       const responsePacket = lobEnc.encode({error},Buffer.from(error?.toString ? error.toString() : 'unknown error'));
       messaging.send(event.fromMsgId, responsePacket);
       return null;
@@ -173,7 +174,7 @@ class PocketProxy {
     const resb = await fres.arrayBuffer();
     const res = getResponseJSON(fres);
     const forward = lobEnc.encode({ res, lan, wan }, Buffer.from(resb));
-    console.log("got forward", res, forward.length);
+    // console.log("got forward", res, forward.length);
     let i = 0;
     for (; i < Math.floor(forward.length / CHUNK_SIZE); i++) {
       messaging.send(
@@ -181,7 +182,7 @@ class PocketProxy {
         forward.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE)
       );
     }
-    console.log("i max", i, Math.ceil(forward.length / CHUNK_SIZE));
+    // console.log("i max", i, Math.ceil(forward.length / CHUNK_SIZE));
     messaging.send(event.fromMsgId, forward.slice(i * CHUNK_SIZE));
     messaging.send(event.fromMsgId, Buffer.from(""));
   }
