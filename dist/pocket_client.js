@@ -26299,6 +26299,9 @@ class ClientManager {
         // alert(`resolve ${address}`);
         client.alive = async () => {
           console.log("send keepalive");
+          if (client._alive && Date.now() - client._alive < 5000){
+            return true;
+          }
           const timeout = new Promise((r) =>
             setTimeout(() => r("timeout"), 1000)
           );
@@ -26327,6 +26330,7 @@ class ClientManager {
           }
 
           console.log("is alive");
+          client._alive = Date.now();
           return true;
         };
         resolve(client);
