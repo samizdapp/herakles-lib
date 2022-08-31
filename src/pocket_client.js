@@ -222,7 +222,7 @@ class ClientManager {
 
   async getAddresses() {
     const lanwan = Array.from(this._addresses);
-    return lanwan.concat([`${await getWSAddress()}:${this._port}`,`setup.local:${this._port}`,`setup.localhost:${this._port}`])
+    return lanwan.concat([`${await getWSAddress()}:${this._port}`])
     // const domain = [`${this._host}:${this._port}`]
     // return lanwan.length ? lanwan.concat : domain;
   }
