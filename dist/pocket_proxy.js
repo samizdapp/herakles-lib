@@ -87,9 +87,8 @@ class PocketProxy {
       const eventEmitter = messaging.getEventEmitter();
 
       eventEmitter.on("route", (event) => {
-        console.log("got route event?", event);
         this.handleEvent(messaging, event).catch((e) => {
-          console.log('caught error',e);
+          console.log('caught handleEvent error',e);
         });
       });
 
@@ -105,7 +104,6 @@ class PocketProxy {
   }
 
   async handleEvent(messaging, event) {
-    console.log("handle event", event.data.length, event.data.byteLength);
     const target = event.target;
     if (target === "ping") {
       console.log("got ping");
@@ -123,7 +121,7 @@ class PocketProxy {
       return;
     }
 
-    console.log("hadling request");
+    // console.log("hadling request");
     this._pending.delete(target);
     const lan = this._lan;
     const wan = this._wan;

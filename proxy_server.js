@@ -8,7 +8,7 @@ async function main() {
   const p = new PocketProxy({ lan: lan.trim(), wan, port: 8004 });
   await p.init();
 
-  // p.listen();
+  // p.listen();67.161.135.187
 }
 
 main();
