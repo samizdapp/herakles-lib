@@ -5,7 +5,14 @@ import globals from "rollup-plugin-node-globals";
 import replace from "@rollup/plugin-replace";
 
 export default [
-
+  {
+    input: "src/p2p_proxy.js",
+    output: {
+      dir: "dist",
+      format: "cjs",
+    },
+    plugins: [],
+  },
   {
     input: "src/pocket_proxy.js",
     output: {
