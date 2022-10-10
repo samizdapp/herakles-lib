@@ -15,5 +15,6 @@ COPY ./src/p2p_proxy.js ./src/p2p_proxy.js
 
 RUN apt-get update
 RUN apt-get install inotify-tools -y
+COPY ./src/relay.js ./src/relay.js
 
 CMD [ "sh", "./start.sh" ]

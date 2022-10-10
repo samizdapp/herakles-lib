@@ -11,6 +11,9 @@ import localip from 'local-ip'
 import { decode, encode } from "lob-enc";
 import fetch from "cross-fetch";
 import { pipe } from 'it-pipe'
+import chokidar from 'chokidar'
+import { Bootstrap } from '@libp2p/bootstrap'
+import { KadDHT } from '@libp2p/kad-dht'
 
 const CHUNK_SIZE = 1024 * 8;
 
@@ -67,6 +70,59 @@ const getIP = async (nat) => new Promise((resolve, reject) => {
   })
 })
 
+const YGGDRASIL_PEERS = '/yggdrasil/peers'
+
+const getRelayAddrs = async (peerId) => {
+  const yg_peers = (await readFile(YGGDRASIL_PEERS))
+    .toString()
+    .split('\n')
+
+  const addrs = []
+
+  for (const host_str of yg_peers) {
+    console.log('host_str', host_str)
+    const [ip_part, host] = host_str.split(' ');
+    if (!host) continue;
+
+    const p1 = host.slice(0, host.length - 1)
+    const p2 = host.slice(host.length - 1)
+    const multiaddraw = await fetch(`https://yggdrasil.${p1}.${p2}.yg/libp2p.relay`).then(r => r.text()).catch(e => {
+      console.log('relay failure', e)
+      return ''
+    })
+
+    const multiaddr = multiaddraw.trim()
+    if (multiaddr && !multiaddr.includes(peerId.toString())) {
+      // console.log('got new relay addr', multiaddr)
+      addrs.push(multiaddr)
+    }
+  }
+
+  console.log('relay addrs', addrs)
+  return addrs;
+}
+
+async function* makeWatcher(file_path) {
+  let ok = true;
+  while (ok) {
+    ok = await new Promise(async (resolve, reject) => {
+      const chok = chokidar.watch(file_path)
+
+      chok.on('change', async () => {
+        await chok.unwatch()
+        resolve(true)
+      })
+      chok.on('error', reject)
+    }).catch(async e => {
+      console.warn('error, waiting 10 seconds', e)
+      await new Promise(r => setTimeout(r, 10000))
+      return true;
+    })
+
+    yield ok;
+  }
+}
+
 export default async function main() {
   const nat = new NATApi()
   console.log('starting', ID_PATH, PUBLIC_PATH)
@@ -76,6 +132,8 @@ export default async function main() {
     await writeFile(ID_PATH, exportToProtobuf(_id))
     return _id;
   })
+
+  await writeFile('/yggdrasil/libp2p.id', peerId.toString())
 
   const bootstrap = await getLocalMultiaddr(peerId.toString())
   await writeFile(PUBLIC_PATH, bootstrap)
@@ -87,18 +145,32 @@ export default async function main() {
   const { success, publicPort } = await mapPort(nat, privatePort)
   const publicIP = await getIP(nat).catch(() => null)
 
+
+  const relay_peers = await getRelayAddrs(peerId)
+  const peerDiscovery = relay_peers.length ? [
+    new Bootstrap({
+      list: relay_peers
+    })
+  ] : undefined
+
+  console.log("peerDiscovery", peerDiscovery)
+
+
   const announce = success && publicIP ? [`/ip4/${publicIP}/tcp/${publicPort}/ws`] : undefined
+
+  if (announce) {
+    await writeFile('/yggdrasil/libp2p.relay', `${announce[0]}/p2p/${peerId.toString()}`)
+  }
   const listen = ['/ip4/0.0.0.0/tcp/9000/ws', '/ip4/0.0.0.0/tcp/9001']
   const node = await createLibp2p({
     peerId,
-    datastore,
+    // datastore,
     addresses: {
-      listen: ['/ip4/0.0.0.0/tcp/9000/ws', '/ip4/0.0.0.0/tcp/9001'],
-      announce: announce
+      listen: ['/ip4/0.0.0.0/tcp/9000/ws', '/ip4/0.0.0.0/tcp/9001']//,
+      // announce: announce
     },
     transports: [
-      new WebSockets(),
-      new TCP()
+      new WebSockets()
     ],
     streamMuxers: [
       new Mplex()
@@ -106,29 +178,68 @@ export default async function main() {
     connectionEncryption: [
       new Noise()
     ],
-    relay: {                   // Circuit Relay options (this config is part of libp2p core configurations)
-      enabled: true,           // Allows you to dial and accept relayed connections. Does not make you a relay.
+    // dht: new KadDHT(),
+
+    peerDiscovery,
+    relay: {
+      enabled: true,
       hop: {
-        enabled: true,         // Allows you to be a relay for other peers
-        active: true           // You will attempt to dial destination peers if you are not connected to them
+        enabled: true
       },
       advertise: {
-        bootDelay: 15 * 60 * 1000, // Delay before HOP relay service is advertised on the network
-        enabled: true,          // Allows you to disable the advertise of the Hop service
-        ttl: 30 * 60 * 1000     // Delay Between HOP relay service advertisements on the network
+        enabled: true,
       }
     },
-    peerStore: {
-      persistence: true,
-      threshold: 5
-    },
-    keychain: {
-      pass: 'notsafepassword123456789',
-      datastore,
+    // connectionManager: {
+    //   autoDial: false, // Auto connect to discovered peers (limited by ConnectionManager minConnections)
+    //   minConnections: 0,
+    //   maxDialsPerPeer: 10
+    //   // The `tag` property will be searched when creating the instance of your Peer Discovery service.
+    //   // The associated object, will be passed to the service when it is instantiated.
+    // },
+    // peerStore: {
+    //   // persistence: true,
+    //   threshold: 5
+    // },
+    // keychain: {
+    //   pass: 'notsafepassword123456789',
+    //   datastore,
+    // }
+  })
+
+  node.peerStore.addEventListener('change:multiaddrs', (evt) => {
+    // Updated self multiaddrs?
+    if (evt.detail.peerId.equals(node.peerId)) {
+      console.log(`Advertising with a relay address of`)
+      node.getMultiaddrs().forEach(m => console.log(m.toString()))
+      console.log(evt.detail)
     }
   })
 
-  console.log(node.libp2p)
+  node.handle('/samizdapp-relay', ({ stream }) => {
+    console.log('got relay stream')
+    pipe(
+      function () {
+        return (async function* () {
+          const seen = new Set()
+          const watcher = makeWatcher(YGGDRASIL_PEERS)
+          do {
+            const relays = (await getRelayAddrs(peerId)).map(str => `${str}/p2p-circuit/p2p/${node.peerId.toString()}`)
+              .filter(str => {
+                const _seen = seen.has(str);
+                seen.add(str);
+                return !_seen;
+              })
+            for (const relay of relays) {
+              console.log('sending relay', relay)
+              yield Buffer.from(relay)
+            }
+          } while (await watcher.next())
+        })()
+      },
+      stream
+    )
+  })
 
   node.handle('/samizdapp-proxy', ({ stream }) => {
     // console.log('got proxy stream')
@@ -209,14 +320,22 @@ export default async function main() {
     maxInboundStreams: 100
   })
 
-  await node.start()
-  node.addEventListener('peer:discovery', ({ detail: peer }) => {
-    console.log('Discovered', peer) // Log discovered peer
+  node.addEventListener('peer:discovery', async ({ detail: peer }) => {
+    console.log('Discovered', peer.id.toString()) // Log discovered peer
+    const relays = await getRelayAddrs(peerId)
+    // const relayIds = new Set()
+    // for (const ma of relays) {
+    //   relayIds.add(ma.split('/').pop())
+    // }
+    // if (relayIds.has(peer.id.toString())) {
+    //   console.log('is relay peer', peer.id.toString())
+    //   await node.dial(peer.id)
+    //   console.log('connected relay peer', peer.id.toString())
+    // }
+    // const conn = await node.dial(peer.multiaddrs[0]).catch()
+    // console.log('made new connection', conn)
   })
 
-  node.addEventListener('peer:connect', (connection) => {
-    console.log('Connected to %s', connection.remotePeer.toString()) // Log connected peer
-  })
   node.connectionManager.addEventListener('peer:connect', (evt) => {
     const connection = evt.detail
     console.log(`Connected to ${connection.remotePeer.toString()}`)
@@ -231,10 +350,9 @@ export default async function main() {
   console.log('Listening on:')
   //  node.getMultiaddrs()
   node.components.getAddressManager().getAddresses().forEach((ma) => console.log(ma.toString()))
-  // node.ping()
-  // stop libp2p
-  // await node.stop()
-  // console.log('libp2p has stopped')
+
+  await node.start()
+
 }
 
 main()
