@@ -14,6 +14,7 @@ import { pipe } from 'it-pipe'
 import chokidar from 'chokidar'
 import { Bootstrap } from '@libp2p/bootstrap'
 import { KadDHT } from '@libp2p/kad-dht'
+import { Socket } from 'net'
 
 const CHUNK_SIZE = 1024 * 8;
 
@@ -121,6 +122,43 @@ async function* makeWatcher(file_path) {
 
     yield ok;
   }
+}
+
+async function pollDial(node, addr) {
+  let conn = null
+  do {
+    conn = node.dial(addr).catch(e => new Promise(r => setTimeout(r, 10000)))
+  } while (!conn)
+  return conn;
+}
+
+async function waitTillClosed(conn) {
+  while (conn.stat.status !== "CLOSED") {
+    await new Promise(r => setTimeout(r, 10000))
+  }
+}
+
+async function keepalive(node, addr) {
+  while (true) {
+    await waitTillClosed(await pollDial(node, addr))
+  }
+}
+
+async function dialRelays(node) {
+  const seen = new Set()
+  const watcher = makeWatcher(YGGDRASIL_PEERS)
+  do {
+    const relays = (await getRelayAddrs(node.peerId))
+      .filter(str => {
+        const _seen = seen.has(str);
+        seen.add(str);
+        return !_seen;
+      })
+    for (const relay of relays) {
+      console.log('keepalive relay', relay)
+      keepalive(node, relay)
+    }
+  } while (await watcher.next())
 }
 
 export default async function main() {
@@ -241,6 +279,18 @@ export default async function main() {
     )
   })
 
+  node.handle('/samizdapp-socket', async ({ stream }) => {
+    const source = intostream(stream.source)
+    const sink = intostream(stream.sink)
+    const socket = new Socket()
+    await new Promise((resolve, reject) => {
+      socket.on('error', reject)
+      socket.connect(8888, 'localhost', resolve)
+    })
+
+    source.pipe(socket).pipe(sink)
+  })
+
   node.handle('/samizdapp-proxy', ({ stream }) => {
     // console.log('got proxy stream')
     pipe(
@@ -312,7 +362,6 @@ export default async function main() {
           }
 
         }
-        console.log('got all values?')
       },
       stream.sink
     )
@@ -320,26 +369,11 @@ export default async function main() {
     maxInboundStreams: 100
   })
 
-  node.addEventListener('peer:discovery', async ({ detail: peer }) => {
-    console.log('Discovered', peer.id.toString()) // Log discovered peer
-    const relays = await getRelayAddrs(peerId)
-    // const relayIds = new Set()
-    // for (const ma of relays) {
-    //   relayIds.add(ma.split('/').pop())
-    // }
-    // if (relayIds.has(peer.id.toString())) {
-    //   console.log('is relay peer', peer.id.toString())
-    //   await node.dial(peer.id)
-    //   console.log('connected relay peer', peer.id.toString())
-    // }
-    // const conn = await node.dial(peer.multiaddrs[0]).catch()
-    // console.log('made new connection', conn)
-  })
 
   node.connectionManager.addEventListener('peer:connect', (evt) => {
     const connection = evt.detail
     console.log(`Connected to ${connection.remotePeer.toString()}`)
-    console.log(connection)
+    // console.log(connection)
   })
 
 
@@ -353,6 +387,7 @@ export default async function main() {
 
   await node.start()
 
+  dialRelays(node)
 }
 
 main()
