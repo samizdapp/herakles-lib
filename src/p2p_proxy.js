@@ -16,7 +16,7 @@ import { Bootstrap } from '@libp2p/bootstrap'
 import { KadDHT } from '@libp2p/kad-dht'
 import { Socket } from 'net'
 
-const CHUNK_SIZE = 1024 * 8;
+const CHUNK_SIZE = 1024 * 64;
 
 const getHeadersJSON = (h) => {
   const ret = {};
@@ -267,10 +267,12 @@ export default async function main() {
                 const _seen = seen.has(str);
                 seen.add(str);
                 return !_seen;
-              })
+              }).concat([announce ? `${announce[0]}/p2p/${peerId.toString()}` : undefined]).reverse()
             for (const relay of relays) {
               console.log('sending relay', relay)
-              yield Buffer.from(relay)
+              if (relay) {
+                yield Buffer.from(relay)
+              }
             }
           } while (await watcher.next())
         })()
