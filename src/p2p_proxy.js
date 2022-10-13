@@ -51,15 +51,22 @@ const getLocalMultiaddr = async (idstr) => {
 
 const mapPort = async (nat, privatePort) => {
   let success = false, publicPort = privatePort - 1;
+  let error = null;
 
   do {
     publicPort++
-    success = await new Promise((resolve) => nat.map({
+    error = await new Promise((resolve) => nat.map({
       privatePort,
       publicPort,
       protocol: 'TCP'
-    }, (err) => err ? resolve(false) : resolve(true)))
-  } while (!success && publicPort - privatePort < 10)
+    }, (err) => resolve(err)))
+  } while (error && publicPort - privatePort < 10)
+
+  if (error) {
+    console.warn('unable to open port', error)
+  }
+
+  success = !error;
 
   return { success, publicPort }
 }
@@ -127,7 +134,7 @@ async function* makeWatcher(file_path) {
 async function pollDial(node, addr) {
   let conn = null
   do {
-    conn = node.dial(addr).catch(e => new Promise(r => setTimeout(r, 10000)))
+    conn = await node.dial(addr).catch(e => new Promise(r => setTimeout(r, 10000)))
   } while (!conn)
   return conn;
 }
