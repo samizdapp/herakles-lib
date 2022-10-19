@@ -36,7 +36,9 @@ const getResponseJSON = (r) => ({
   url: r.url,
 });
 const ID_PATH = process.env.ID_PATH || './store/id'
-const PUBLIC_PATH = process.env.PUBLIC_PATH || './store/libp2p.bootstrap'
+const PUBLIC_PATH = process.env.PUBLIC_PATH || './store'
+const BOOTSTRAP_PATH = `${PUBLIC_PATH}/libp2p.bootstrap`
+const RELAY_CACHE_PATH = `${PUBLIC_PATH}/libp2p.relays`
 const PRIVATE_PORT = 9000
 
 const getLocalIPS = async () => {
@@ -95,7 +97,7 @@ const getRelayAddrs = async (peerId) => {
     const p1 = host.slice(0, host.length - 1)
     const p2 = host.slice(host.length - 1)
     const multiaddraw = await fetch(`https://yggdrasil.${p1}.${p2}.yg/libp2p.relay`).then(r => r.text()).catch(e => {
-      console.log('relay failure', e)
+      console.log('relay failure, ignoring')
       return ''
     })
 
@@ -151,6 +153,12 @@ async function keepalive(node, addr) {
   }
 }
 
+async function cachePublicMultiaddr(ma) {
+  const cache = await readFile(RELAY_CACHE_PATH).then(s => new Set(s.toString().trim().split(','))).catch(() => new Set())
+  cache.add(ma)
+  await writeFile(RELAY_CACHE_PATH, Array.from(cache).join(','))
+}
+
 async function dialRelays(node) {
   const seen = new Set()
   const watcher = makeWatcher(YGGDRASIL_PEERS)
@@ -164,6 +172,7 @@ async function dialRelays(node) {
     for (const relay of relays) {
       console.log('keepalive relay', relay)
       keepalive(node, relay)
+      await cachePublicMultiaddr(`${relay}/p2p-circuit/p2p/${node.peerId.toString()}`)
     }
   } while (await watcher.next())
 }
@@ -181,7 +190,7 @@ export default async function main() {
   await writeFile('/yggdrasil/libp2p.id', peerId.toString())
 
   const bootstrap = await getLocalMultiaddr(peerId.toString())
-  await writeFile(PUBLIC_PATH, bootstrap)
+  await writeFile(BOOTSTRAP_PATH, bootstrap)
 
   const datastore = new LevelDatastore('./libp2p')
   await datastore.open() // level database must be ready before node boot
@@ -204,7 +213,9 @@ export default async function main() {
   const announce = success && publicIP ? [`/ip4/${publicIP}/tcp/${publicPort}/ws`] : undefined
 
   if (announce) {
-    await writeFile('/yggdrasil/libp2p.relay', `${announce[0]}/p2p/${peerId.toString()}`)
+    const ma = `${announce[0]}/p2p/${peerId.toString()}`
+    await writeFile('/yggdrasil/libp2p.relay', ma)
+    await cachePublicMultiaddr(ma)
   }
   const listen = ['/ip4/0.0.0.0/tcp/9000/ws', '/ip4/0.0.0.0/tcp/9001']
   const node = await createLibp2p({
