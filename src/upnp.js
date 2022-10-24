@@ -2,7 +2,7 @@ import { exec } from "child_process";
 import { promisify } from "node:util";
 const execProm = promisify(exec);
 
-export const mapPort = async (privatePort) => {
+export const mapPort = async (privatePort, skipRetry = false) => {
   let success = false,
     publicPort = privatePort - 1;
   let error = null;
@@ -13,26 +13,27 @@ export const mapPort = async (privatePort) => {
   }
 
   do {
-    do {
-      publicPort++;
-      error = await execProm(`upnpc -r ${privatePort} ${publicPort} TCP`)
-        .then(({ stdout }) => {
-          if (stdout.includes("TCP is redirected to internal")) {
-            return null;
-          } else {
-            return true;
-          }
-        })
-        .catch(async (e) => {
-          await new Promise((r) => setTimeout(r, 2000));
-          return e;
-        });
-    } while (error && publicPort - privatePort < 10);
-    if (error) {
-      await nukeUPNP();
+    publicPort++;
+    error = await execProm(`upnpc -r ${privatePort} ${publicPort} TCP`)
+      .then(({ stdout }) => {
+        if (stdout.includes("TCP is redirected to internal")) {
+          return null;
+        } else {
+          return true;
+        }
+      })
+      .catch(async (e) => {
+        await new Promise((r) => setTimeout(r, 2000));
+        return e;
+      });
+  } while (error && publicPort - privatePort < 10);
+
+  if (error && !skipRetry) {
+    const success = await nukeUPNP();
+    if (success) {
+      return mapPort(privatePort, true);
     }
-    retry--;
-  } while (error && retry);
+  }
   if (error) {
     console.warn("unable to open port", error);
   }
@@ -81,15 +82,18 @@ export const nukeUPNP = async () => {
     })
     .filter((_) => _);
 
-  const proms = [];
-
   for (const { port, protocol } of toClear) {
     console.log("try to clear upnp entry", port, protocol);
-    proms.push(
-      execProm(`upnpc -d ${port} ${protocol}`).catch((e) => console.warn(e))
-    );
-    await new Promise((r) => setTimeout(r, 500));
+    const success = await execProm(`upnpc -d ${port} ${protocol}`)
+      .then(() => true)
+      .catch((e) => {
+        console.warn(e);
+        return false;
+      });
+    if (success) {
+      return success;
+    }
   }
 
-  await Promise.all(proms);
+  return false;
 };

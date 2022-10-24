@@ -19,6 +19,7 @@ import NATApi from "nat-api";
 import { Socket } from "net";
 import { mapPort } from "./upnp.js";
 import { webcrypto } from "crypto";
+import WebSocket from "ws";
 
 const CHUNK_SIZE = 1024 * 64;
 
@@ -73,7 +74,11 @@ const getIP = async (nat) =>
 const YGGDRASIL_PEERS = "/yggdrasil/peers";
 
 const getRelayAddrs = async (peerId) => {
-  const yg_peers = (await readFile(YGGDRASIL_PEERS)).toString().split("\n");
+  const yg_peers = (
+    await readFile(YGGDRASIL_PEERS).catch((e) => Buffer.from(""))
+  )
+    .toString()
+    .split("\n");
 
   const proms = [];
 
@@ -222,7 +227,7 @@ export default async function main() {
       return _id;
     });
 
-  await writeFile("/yggdrasil/libp2p.id", peerId.toString());
+  // await writeFile("/yggdrasil/libp2p.id", peerId.toString());
 
   const bootstrap = await getLocalMultiaddr(peerId.toString());
   await writeFile(BOOTSTRAP_PATH, bootstrap);
@@ -357,6 +362,67 @@ export default async function main() {
     });
 
     source.pipe(socket).pipe(sink);
+  });
+
+  const readNextLob = async (ws) =>
+    new Promise(
+      (r) =>
+        (ws.onmessage = ({ data, ...json }) => {
+          console.log("got ws message", data.toString(), json);
+          r(encode(json, Buffer.from(data)));
+        })
+    );
+
+  const writeNextLob = (ws, msg) => {
+    ws.send(decode(Buffer.from(msg.subarray())).body);
+  };
+
+  async function* makeWebsocketReadStream(ws) {
+    while (ws.readyState == 1) {
+      yield readNextLob(ws);
+    }
+  }
+
+  function makeWebSocketSink(ws) {
+    return async (source) => {
+      for await (const value of source) {
+        await writeNextLob(ws, value);
+      }
+    };
+  }
+
+  const wsOpen = async (ws) => {
+    return new Promise((resolve, reject) => {
+      ws.onopen = resolve;
+      ws.onerror = reject;
+    });
+  };
+
+  node.handle("/samizdapp-websocket", async ({ stream }) => {
+    console.log("got websocket stream", stream);
+    const { value } = await stream.source.next();
+    const {
+      json: { type, url, protocols },
+    } = decode(Buffer.from(value.subarray()));
+    console.log("init", type, url, protocols);
+    if (type !== "URL") {
+      console.warn("first message expects URL");
+      return stream.close();
+    }
+    const ws = new WebSocket(url, protocols);
+    await wsOpen(ws)
+      .then(() => {
+        console.log("websocket open");
+        const wsRead = makeWebsocketReadStream(ws);
+        const wsWrite = makeWebSocketSink(ws);
+
+        pipe(wsRead, stream.sink);
+
+        pipe(stream.source, wsWrite);
+      })
+      .catch((e) => {
+        console.log("websocket stream error", e);
+      });
   });
 
   node.handle(
