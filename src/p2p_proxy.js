@@ -215,6 +215,19 @@ async function dialRelays(node) {
   } while (!done);
 }
 
+async function monitorMemory() {
+  while (true) {
+    const used = process.memoryUsage();
+    console.log("current memory usage:");
+    for (let key in used) {
+      console.log(
+        `${key} ${Math.round((used[key] / 1024 / 1024) * 100) / 100} MB`
+      );
+    }
+    await new Promise((r) => setTimeout(r, 60000));
+  }
+}
+
 export default async function main() {
   const nat = new NATApi();
   console.log("starting", ID_PATH, PUBLIC_PATH);
@@ -536,6 +549,7 @@ export default async function main() {
   await node.start();
 
   dialRelays(node);
+  monitorMemory();
 }
 
 main();
