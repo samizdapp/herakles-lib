@@ -10,7 +10,7 @@ import { WebSockets } from "@libp2p/websockets";
 import chokidar from "chokidar";
 import fetch from "cross-fetch";
 import { LevelDatastore } from "datastore-level";
-import { readFile, writeFile } from "fs/promises";
+import { readFile, writeFile, rm } from "fs/promises";
 import { pipe } from "it-pipe";
 import { createLibp2p } from "libp2p";
 import { decode, encode } from "lob-enc";
@@ -293,6 +293,8 @@ export default async function main() {
     const ma = `${announce[0]}/p2p/${peerId.toString()}`;
     await writeFile("/yggdrasil/libp2p.relay", ma);
     await cachePublicMultiaddr(ma);
+  } else {
+    await rm("/yggdrasil/libp2p.relay");
   }
   const listen = ["/ip4/0.0.0.0/tcp/9000/ws", "/ip4/0.0.0.0/tcp/9001"];
   const node = await createLibp2p({
