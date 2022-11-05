@@ -171,8 +171,15 @@ async function pollDial(node, addr) {
   return conn;
 }
 
-async function waitTillClosed(conn) {
-  while (conn.stat.status !== "CLOSED") {
+function connectionIsOpen(conn) {
+  const conns = node.connectionManager.getConnections();
+  return (
+    conns.map(({ id }) => id).includes(conn.id) && conn.stat.status === "OPEN"
+  );
+}
+
+async function waitTillClosed(conn, node) {
+  while (connectionIsOpen(conn, node)) {
     await new Promise((r) => setTimeout(r, 10000));
   }
   console.log("connection closed");
@@ -180,7 +187,7 @@ async function waitTillClosed(conn) {
 
 async function keepalive(node, addr) {
   while (true) {
-    await waitTillClosed(await pollDial(node, addr));
+    await waitTillClosed(await pollDial(node, addr), node);
   }
 }
 
