@@ -171,18 +171,18 @@ async function pollDial(node, addr) {
   return conn;
 }
 
-function connectionIsOpen(conn) {
+function connectionIsOpen(conn, node) {
   const conns = node.connectionManager.getConnections();
-  return (
-    conns.map(({ id }) => id).includes(conn.id) && conn.stat.status === "OPEN"
-  );
+  const isOpen =
+    conns.map(({ id }) => id).includes(conn.id) && conn.stat.status === "OPEN";
+  return isOpen;
 }
 
 async function waitTillClosed(conn, node) {
   while (connectionIsOpen(conn, node)) {
     await new Promise((r) => setTimeout(r, 10000));
   }
-  console.log("connection closed");
+  console.log("connection closed", conn.id);
 }
 
 async function keepalive(node, addr) {
@@ -199,27 +199,43 @@ async function cachePublicMultiaddr(ma) {
   await writeFile(RELAY_CACHE_PATH, Array.from(cache).join(","));
 }
 
-async function dialRelays(node) {
-  const seen = new Set();
-  const watcher = makeWatcher(YGGDRASIL_PEERS, "dial_relays");
-  let abort, done;
-  do {
-    const relays = (await getRelayAddrs(node.peerId)).filter((str) => {
-      const _seen = seen.has(str);
-      seen.add(str);
-      return !_seen;
-    });
-    for (const relay of relays) {
-      console.log("keepalive relay", relay);
-      keepalive(node, relay);
-      await cachePublicMultiaddr(
-        `${relay}/p2p-circuit/p2p/${node.peerId.toString()}`
-      );
+function relayStreamFactory(node) {
+  const relays = new Set();
+
+  (async function () {
+    const watcher = makeWatcher(YGGDRASIL_PEERS, "dial_relays");
+    let done = false;
+    do {
+      (await getRelayAddrs(node.peerId)).filter((str) => {
+        const _seen = relays.has(str);
+        relays.add(str);
+        return !_seen;
+      });
+      const res = await watcher.next();
+      done = res.done;
+    } while (!done);
+  })();
+
+  return async function* makeRelayStream() {
+    const seen = new Set();
+    while (true) {
+      await new Promise((r) => setTimeout(r, 1000));
+      for (const relay of Array.from(relays)) {
+        if (!seen.has(relay)) {
+          seen.add(relay);
+          yield relay;
+        }
+      }
     }
-    const res = await watcher.next();
-    abort = res.value;
-    done = res.done;
-  } while (!done);
+  };
+}
+
+async function dialRelays(node, makeRelayStream) {
+  const relayStream = makeRelayStream();
+  let relay;
+  while ((relay = (await relayStream.next()).value)) {
+    keepalive(node, relay);
+  }
 }
 
 async function monitorMemory() {
@@ -327,49 +343,29 @@ export default async function main() {
     }
   });
 
+  let makeRelayStream = null;
+
   node.handle("/samizdapp-relay", async ({ stream, connection }) => {
-    console.log("got relay stream");
-    const watcher = makeWatcher(
-      YGGDRASIL_PEERS,
-      "relay-stream-" + webcrypto.randomUUID()
-    );
+    while (!makeRelayStream) {
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+
     let abort = false;
     pipe(function () {
       return (async function* () {
-        const seen = new Set();
-        let done = false;
-        do {
-          console.log("scan relays");
-          const relays = (await getRelayAddrs(peerId))
-            .map((str) => `${str}/p2p-circuit/p2p/${node.peerId.toString()}`)
-            .concat([
-              announce ? `${announce[0]}/p2p/${peerId.toString()}` : undefined,
-            ])
-            .filter((str) => {
-              if (!str) {
-                return false;
-              }
-              const _seen = seen.has(str);
-              seen.add(str);
-              return !_seen;
-            })
-            .reverse();
-          for (const relay of relays) {
-            console.log("sending relay", relay);
-            yield Buffer.from(relay);
-          }
-          const res = await watcher.next();
-          done = res.done;
-          abort = res.abort;
-        } while (!done);
+        const relayStream = makeRelayStream();
+        let relay;
+        while ((relay = (await relayStream.next()).value)) {
+          yield Buffer.from(relay);
+        }
       })();
     }, stream);
 
-    await waitTillClosed(connection);
-    while (!abort) {
-      await new Promise((r) => setTimeout(r, 1000));
-    }
-    abort();
+    // await waitTillClosed(connection, node);
+    // while (!abort) {
+    //   await new Promise((r) => setTimeout(r, 1000));
+    // }
+    // abort();
   });
 
   node.handle("/samizdapp-socket", async ({ stream }) => {
@@ -555,7 +551,9 @@ export default async function main() {
 
   await node.start();
 
-  dialRelays(node);
+  makeRelayStream = relayStreamFactory(node);
+
+  dialRelays(node, makeRelayStream);
   monitorMemory();
 }
 
