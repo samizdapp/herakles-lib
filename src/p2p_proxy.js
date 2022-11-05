@@ -89,7 +89,7 @@ const getRelayAddrs = async (peerId) => {
     const p1 = host.slice(0, host.length - 1);
     const p2 = host.slice(host.length - 1);
     const fetchaddr = `https://yggdrasil.${p1}.${p2}.yg/libp2p.relay`;
-    console.log("try relay", fetchaddr);
+    // console.log("try relay", fetchaddr);
     proms.push(
       fetch(fetchaddr)
         .then((r) => r.text())
