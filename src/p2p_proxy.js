@@ -20,6 +20,7 @@ import { Socket } from "net";
 import { mapPort } from "./upnp.js";
 import { webcrypto } from "crypto";
 import WebSocket from "ws";
+import { KEEP_ALIVE } from "@libp2p/interface-peer-store/tags";
 
 const CHUNK_SIZE = 1024 * 64;
 
@@ -168,18 +169,30 @@ async function pollDial(node, addr) {
       .dial(addr)
       .catch((e) => new Promise((r) => setTimeout(r, 10000)));
   } while (!conn);
+  await node.peerStore.tagPeer(conn.remotePeer, KEEP_ALIVE).catch((e) => {
+    // throws an error if already tagged, ignore
+    // console.warn(e);
+  });
   return conn;
 }
 
-function connectionIsOpen(conn, node) {
+async function connectionIsOpen(conn, node) {
+  const latency = await node.ping(conn.remotePeer).catch((e) => {
+    console.warn(e);
+    return null;
+  });
   const conns = node.connectionManager.getConnections();
   const isOpen =
-    conns.map(({ id }) => id).includes(conn.id) && conn.stat.status === "OPEN";
+    latency &&
+    conns.map(({ id }) => id).includes(conn.id) &&
+    conn.stat.status === "OPEN";
+  // console.log("check connection open", conn.id, isOpen);
+
   return isOpen;
 }
 
 async function waitTillClosed(conn, node) {
-  while (connectionIsOpen(conn, node)) {
+  while (await connectionIsOpen(conn, node)) {
     await new Promise((r) => setTimeout(r, 10000));
   }
   console.log("connection closed", conn.id);
@@ -187,7 +200,8 @@ async function waitTillClosed(conn, node) {
 
 async function keepalive(node, addr) {
   while (true) {
-    await waitTillClosed(await pollDial(node, addr), node);
+    const conn = await pollDial(node, addr);
+    await waitTillClosed(conn, node);
   }
 }
 
