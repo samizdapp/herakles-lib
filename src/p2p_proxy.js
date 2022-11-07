@@ -308,7 +308,9 @@ export default async function main() {
     await writeFile("/yggdrasil/libp2p.relay", ma);
     await cachePublicMultiaddr(ma);
   } else {
-    await rm("/yggdrasil/libp2p.relay");
+    await rm("/yggdrasil/libp2p.relay").catch((e) => {
+      //will throw error if no file, ignore
+    });
   }
   const listen = ["/ip4/0.0.0.0/tcp/9000/ws", "/ip4/0.0.0.0/tcp/9001"];
   const node = await createLibp2p({
