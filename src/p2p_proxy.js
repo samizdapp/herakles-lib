@@ -178,7 +178,7 @@ async function pollDial(node, addr) {
 
 async function connectionIsOpen(conn, node) {
   const latency = await node.ping(conn.remotePeer).catch((e) => {
-    console.warn(e);
+    // console.warn(e);
     return null;
   });
   const conns = node.connectionManager.getConnections();
@@ -372,6 +372,9 @@ export default async function main() {
     pipe(function () {
       return (async function* () {
         const relayStream = makeRelayStream();
+        if (announce) {
+          yield Buffer.from(`${announce[0]}/p2p/${peerId.toString()}`);
+        }
         let relay;
         while ((relay = (await relayStream.next()).value)) {
           yield Buffer.from(relay);
