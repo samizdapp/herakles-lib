@@ -374,13 +374,11 @@ export default async function main() {
       return (async function* () {
         const relayStream = makeRelayStream();
         if (announce) {
-          yield Buffer.from(
-            `${announce[0]}/p2p-circuit/p2p/${peerId.toString()}`
-          );
+          yield Buffer.from(`${announce[0]}/p2p/${peerId.toString()}`);
         }
         let relay;
         while ((relay = (await relayStream.next()).value)) {
-          yield Buffer.from(relay);
+          yield Buffer.from(`${relay}/p2p-circuit/p2p/${peerId.toString()}`);
         }
       })();
     }, stream);
