@@ -177,8 +177,9 @@ async function pollDial(node, addr) {
 }
 
 async function connectionIsOpen(conn, node) {
+  console.log("ping connection", conn.remotePeer.toString());
   const latency = await node.ping(conn.remotePeer).catch((e) => {
-    // console.warn(e);
+    console.warn(e.message);
     return null;
   });
   const conns = node.connectionManager.getConnections();
@@ -195,7 +196,7 @@ async function waitTillClosed(conn, node) {
   while (await connectionIsOpen(conn, node)) {
     await new Promise((r) => setTimeout(r, 10000));
   }
-  console.log("connection closed", conn.id);
+  console.log("connection closed", conn.remotePeer.toString());
 }
 
 async function keepalive(node, addr) {
