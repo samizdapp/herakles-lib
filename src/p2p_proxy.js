@@ -194,7 +194,7 @@ async function connectionIsOpen(conn, node) {
 
 async function waitTillClosed(conn, node) {
   while (await connectionIsOpen(conn, node)) {
-    await new Promise((r) => setTimeout(r, 10000));
+    await new Promise((r) => setTimeout(r, 30000));
   }
   console.log("connection closed", conn.remotePeer.toString());
 }
