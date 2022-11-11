@@ -180,6 +180,11 @@ async function connectionIsOpen(conn, node) {
   // console.log("ping connection", conn.remotePeer.toString());
   const latency = await node.ping(conn.remotePeer).catch((e) => {
     console.warn(e.message);
+    // this error doesn't recover. nuke the process and restart
+    if (e.message.includes("Mux")) {
+      console.log("restart process");
+      process.exit(1);
+    }
     return null;
   });
   const conns = node.connectionManager.getConnections();
