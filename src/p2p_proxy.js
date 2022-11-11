@@ -22,7 +22,7 @@ import { webcrypto } from "crypto";
 import WebSocket from "ws";
 import { KEEP_ALIVE } from "@libp2p/interface-peer-store/tags";
 
-const CHUNK_SIZE = 1024 * 64;
+const CHUNK_SIZE = 1024 * 8;
 
 const getHeadersJSON = (h) => {
   const ret = {};
@@ -177,8 +177,9 @@ async function pollDial(node, addr) {
 }
 
 async function connectionIsOpen(conn, node) {
+  // console.log("ping connection", conn.remotePeer.toString());
   const latency = await node.ping(conn.remotePeer).catch((e) => {
-    console.warn(e);
+    console.warn(e.message);
     return null;
   });
   const conns = node.connectionManager.getConnections();
@@ -193,9 +194,9 @@ async function connectionIsOpen(conn, node) {
 
 async function waitTillClosed(conn, node) {
   while (await connectionIsOpen(conn, node)) {
-    await new Promise((r) => setTimeout(r, 10000));
+    await new Promise((r) => setTimeout(r, 30000));
   }
-  console.log("connection closed", conn.id);
+  console.log("connection closed", conn.remotePeer.toString());
 }
 
 async function keepalive(node, addr) {
@@ -372,9 +373,12 @@ export default async function main() {
     pipe(function () {
       return (async function* () {
         const relayStream = makeRelayStream();
+        if (announce) {
+          yield Buffer.from(`${announce[0]}/p2p/${peerId.toString()}`);
+        }
         let relay;
         while ((relay = (await relayStream.next()).value)) {
-          yield Buffer.from(relay);
+          yield Buffer.from(`${relay}/p2p-circuit/p2p/${peerId.toString()}`);
         }
       })();
     }, stream);
@@ -554,6 +558,12 @@ export default async function main() {
   node.connectionManager.addEventListener("peer:connect", (evt) => {
     const connection = evt.detail;
     console.log(`Connected to ${connection.remotePeer.toString()}`);
+    // console.log(connection)
+  });
+
+  node.connectionManager.addEventListener("peer:disconnect", (evt) => {
+    const connection = evt.detail;
+    console.log(`disconnected from ${connection.remotePeer.toString()}`);
     // console.log(connection)
   });
 
