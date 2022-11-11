@@ -177,7 +177,7 @@ async function pollDial(node, addr) {
 }
 
 async function connectionIsOpen(conn, node) {
-  console.log("ping connection", conn.remotePeer.toString());
+  // console.log("ping connection", conn.remotePeer.toString());
   const latency = await node.ping(conn.remotePeer).catch((e) => {
     console.warn(e.message);
     return null;
