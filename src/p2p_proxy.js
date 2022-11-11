@@ -22,7 +22,7 @@ import { webcrypto } from "crypto";
 import WebSocket from "ws";
 import { KEEP_ALIVE } from "@libp2p/interface-peer-store/tags";
 
-const CHUNK_SIZE = 1024 * 8;
+const CHUNK_SIZE = 1024 * 64;
 
 const getHeadersJSON = (h) => {
   const ret = {};
