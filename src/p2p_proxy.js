@@ -176,9 +176,9 @@ async function pollDial(node, addr) {
   return conn;
 }
 
-async function connectionIsOpen(conn, node) {
+async function connectionIsOpen(conn, node, addr) {
   // console.log("ping connection", conn.remotePeer.toString());
-  const latency = await node.ping(conn.remotePeer).catch((e) => {
+  await node.dial(addr).catch((e) => {
     console.warn(e.message);
     // this error doesn't recover. nuke the process and restart
     if (e.message.includes("Mux")) {
@@ -207,7 +207,7 @@ async function waitTillClosed(conn, node) {
 async function keepalive(node, addr) {
   while (true) {
     const conn = await pollDial(node, addr);
-    await waitTillClosed(conn, node);
+    await waitTillClosed(conn, node, addr);
   }
 }
 
