@@ -9,7 +9,6 @@ import {
 import { WebSockets } from "@libp2p/websockets";
 import chokidar from "chokidar";
 import fetch from "cross-fetch";
-import { LevelDatastore } from "datastore-level";
 import { readFile, writeFile, rm } from "fs/promises";
 import { pipe } from "it-pipe";
 import { createLibp2p } from "libp2p";
@@ -105,7 +104,7 @@ const getRelayAddrs = async (peerId) => {
     (multiaddr) => multiaddr && !multiaddr.includes(peerId.toString())
   );
 
-  console.log("relay addrs", addrs);
+  // console.log("relay addrs", addrs);
   return addrs;
 };
 
@@ -150,19 +149,19 @@ async function* makeWatcher(file_path, id = webcrypto.randomUUID()) {
   };
 
   while (!aborted) {
-    console.log("watcher loop", id, new Date());
+    // console.log("watcher loop", id, new Date());
     const { prom, abort } = await makeWatchProm(file_path, resetTimeout);
 
     const ok = await Promise.race([prom, delay(timeout)]).then(() => true);
     await abort();
     timeout *= 2;
-    timeout = Math.min(timeout, 1000 * 60 * 5);
+    timeout = Math.min(timeout, 1000 * 60 * 10);
     yield abort;
   }
 }
 
 async function pollDial(node, addr) {
-  console.log("dial", addr);
+  // console.log("dial", addr);
   let conn = null;
   do {
     conn = await node
@@ -176,38 +175,11 @@ async function pollDial(node, addr) {
   return conn;
 }
 
-async function connectionIsOpen(conn, node, addr) {
-  // console.log("ping connection", conn.remotePeer.toString());
-  await node.dial(addr).catch((e) => {
-    console.warn(e.message);
-    // this error doesn't recover. nuke the process and restart
-    if (e.message.includes("Mux")) {
-      console.log("restart process");
-      process.exit(1);
-    }
-    return null;
-  });
-  const conns = node.connectionManager.getConnections();
-  const isOpen =
-    latency &&
-    conns.map(({ id }) => id).includes(conn.id) &&
-    conn.stat.status === "OPEN";
-  // console.log("check connection open", conn.id, isOpen);
-
-  return isOpen;
-}
-
-async function waitTillClosed(conn, node) {
-  while (await connectionIsOpen(conn, node)) {
-    await new Promise((r) => setTimeout(r, 30000));
-  }
-  console.log("connection closed", conn.remotePeer.toString());
-}
-
 async function keepalive(node, addr) {
   while (true) {
-    const conn = await pollDial(node, addr);
-    await waitTillClosed(conn, node, addr);
+    await pollDial(node, addr);
+    console.log("keepalive", addr);
+    await new Promise((r) => setTimeout(r, 60000));
   }
 }
 
@@ -267,7 +239,7 @@ async function monitorMemory() {
         `${key} ${Math.round((used[key] / 1024 / 1024) * 100) / 100} MB`
       );
     }
-    await new Promise((r) => setTimeout(r, 60000));
+    await new Promise((r) => setTimeout(r, 360000));
   }
 }
 
@@ -288,8 +260,8 @@ export default async function main() {
   const bootstrap = await getLocalMultiaddr(peerId.toString());
   await writeFile(BOOTSTRAP_PATH, bootstrap);
 
-  const datastore = new LevelDatastore("./libp2p");
-  await datastore.open(); // level database must be ready before node boot
+  // const datastore = new LevelDatastore("./libp2p");
+  // await datastore.open(); // level database must be ready before node boot
 
   const privatePort = PRIVATE_PORT;
   const { success, publicPort } = await mapPort(privatePort);
@@ -304,7 +276,7 @@ export default async function main() {
       ]
     : undefined;
 
-  console.log("peerDiscovery", peerDiscovery);
+  // console.log("peerDiscovery", peerDiscovery);
 
   const announce =
     success && publicIP ? [`/ip4/${publicIP}/tcp/${publicPort}/ws`] : undefined;
@@ -358,14 +330,14 @@ export default async function main() {
     // }
   });
 
-  node.peerStore.addEventListener("change:multiaddrs", (evt) => {
-    // Updated self multiaddrs?
-    if (evt.detail.peerId.equals(node.peerId)) {
-      console.log(`Advertising with a relay address of`);
-      node.getMultiaddrs().forEach((m) => console.log(m.toString()));
-      console.log(evt.detail);
-    }
-  });
+  // node.peerStore.addEventListener("change:multiaddrs", (evt) => {
+  //   // Updated self multiaddrs?
+  //   if (evt.detail.peerId.equals(node.peerId)) {
+  //     // console.log(`Advertising with a relay address of`);
+  //     // node.getMultiaddrs().forEach((m) => console.log(m.toString()));
+  //     // console.log(evt.detail);
+  //   }
+  // });
 
   let makeRelayStream = null;
 
@@ -411,7 +383,7 @@ export default async function main() {
     new Promise(
       (r) =>
         (ws.onmessage = ({ data, ...json }) => {
-          console.log("got ws message", data.toString(), json);
+          // console.log("got ws message", data.toString(), json);
           r(encode(json, Buffer.from(data)));
         })
     );
@@ -562,13 +534,13 @@ export default async function main() {
 
   node.connectionManager.addEventListener("peer:connect", (evt) => {
     const connection = evt.detail;
-    console.log(`Connected to ${connection.remotePeer.toString()}`);
+    // console.log(`Connected to ${connection.remotePeer.toString()}`);
     // console.log(connection)
   });
 
   node.connectionManager.addEventListener("peer:disconnect", (evt) => {
     const connection = evt.detail;
-    console.log(`disconnected from ${connection.remotePeer.toString()}`);
+    // console.log(`disconnected from ${connection.remotePeer.toString()}`);
     // console.log(connection)
   });
 
