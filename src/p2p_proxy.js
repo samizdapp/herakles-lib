@@ -532,6 +532,84 @@ export default async function main() {
     }
   );
 
+  node.handle(
+    "/samizdapp-proxy/2.0.0",
+    async ({ stream }) => {
+      console.log("got proxy stream 2.0.0");
+      const pStream = new WrappedStream(stream);
+      pStream.open();
+
+      while (pStream.isOpen) {
+        const chunks = await pStream.request();
+        console.log("got chunks", chunks);
+        const raw = Buffer.concat(chunks);
+        let {
+          json: { reqObj, reqInit },
+          body,
+        } = decode(raw);
+
+        let fres, url, init;
+        // console.log("set body", body ? body.toString() : "");
+        if (typeof reqObj === "string") {
+          url = reqObj.startsWith("http")
+            ? reqObj
+            : `http://localhost${reqObj}`;
+          if (
+            reqInit.method &&
+            reqInit.method !== "HEAD" &&
+            reqInit.method !== "GET"
+          ) {
+            reqInit.body = body;
+          }
+          init = reqInit;
+        } else if (typeof reqObj !== "string") {
+          reqInit = reqObj;
+          url = reqObj.url;
+          if (
+            reqObj.method &&
+            reqObj.method !== "HEAD" &&
+            reqObj.method !== "GET"
+          ) {
+            reqObj.body = body;
+          }
+          init = reqObj;
+        }
+
+        console.log("do fetch", url); //, init, init.body ? init.body : '')
+        try {
+          fres = await fetch(url, init);
+
+          const resb = await fres.arrayBuffer();
+          const res = getResponseJSON(fres);
+          const body = Buffer.from(resb);
+          const forward = encode({ res, bodyLength: body.byteLength }, body);
+          // console.log("got forward", res, forward.length);
+          let i = 0;
+          const _chunks = [];
+          for (; i <= Math.floor(forward.length / CHUNK_SIZE); i++) {
+            _chunks.push(forward.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE));
+          }
+          // console.log("i max", i, Math.ceil(forward.length / CHUNK_SIZE));
+          // _chunks.push(Buffer.from([0x00]));
+          // console.log("send chunks");
+          pStream.response(_chunks);
+        } catch (error) {
+          console.log("proxy downstream error", error);
+          const body = Buffer.from(
+            error?.toString ? error.toString() : "unknown error"
+          );
+          pStream.response([
+            encode({ error, bodyLength: body.byteLength }, body),
+          ]);
+        }
+        // });
+      }
+    },
+    {
+      maxInboundStreams: 100,
+    }
+  );
+
   node.connectionManager.addEventListener("peer:connect", (evt) => {
     const connection = evt.detail;
     // console.log(`Connected to ${connection.remotePeer.toString()}`);
@@ -563,3 +641,102 @@ export default async function main() {
 }
 
 main();
+
+class WrappedStream {
+  outbox = [];
+  inbox = [];
+  hasResponse = Promise.resolve();
+  outboxTrigger = () => {
+    // noop
+  };
+  inboxTrigger = () => {
+    // noop
+  };
+
+  get isOpen() {
+    return this.stream.stat.timeline.close === undefined;
+  }
+
+  constructor(stream) {
+    this.stream = stream;
+  }
+
+  async request(chunks) {
+    this.outbox = chunks;
+    this.outboxTrigger();
+
+    this.inbox = [];
+    return bufs;
+  }
+
+  close() {
+    this.stream.close();
+  }
+
+  async request() {
+    await new Promise((r) => {
+      this.inboxTrigger = r;
+    });
+    const bufs = this.inbox.map(Buffer.from);
+    this.inbox = [];
+    return bufs;
+  }
+
+  async response(chunks) {
+    this.outbox = chunks;
+    this.outboxTrigger();
+  }
+
+  async open() {
+    this.stream.sink(
+      (async function* (wrapped) {
+        while (true) {
+          await new Promise((r) => {
+            wrapped.outboxTrigger = r;
+          });
+
+          for await (const chunk of wrapped.outbox) {
+            // console.log("send chunk", chunk);
+            yield chunk;
+          }
+        }
+      })(this)
+    );
+
+    let currentLength = 0;
+    let headLength = 0;
+    let totalLength = 0;
+    for await (const chunk of this.stream.source) {
+      const buf = Buffer.from(chunk.subarray());
+      if (buf.byteLength === 1 && buf[0] === 0x00) {
+        console.log("ignore null byte");
+        continue;
+      }
+      this.inbox.push(buf);
+      if (headLength === 0) {
+        // console.log("read buf", buf);
+        headLength = buf.readUInt16BE(0) + 2;
+      }
+      currentLength += buf.length;
+      if (totalLength === 0 && currentLength >= headLength) {
+        const packet = decode(Buffer.concat(this.inbox));
+        totalLength = (packet?.json?.bodyLength ?? 0) + headLength;
+      }
+      // console.log(
+      //   "chunk",
+      //   currentLength,
+      //   headLength,
+      //   totalLength,
+      //   totalLength === 0 && currentLength >= headLength
+      // );
+      if (currentLength === totalLength) {
+        currentLength = 0;
+        headLength = 0;
+        totalLength = 0;
+        this.inboxTrigger();
+      }
+    }
+
+    this.close();
+  }
+}
