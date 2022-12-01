@@ -536,12 +536,12 @@ export default async function main() {
     "/samizdapp-proxy/2.0.0",
     async ({ stream }) => {
       console.log("got proxy stream 2.0.0");
-      const pStream = new WrappedStream(stream);
+      const pStream = new RequestStream(stream);
       pStream.open();
 
       while (pStream.isOpen) {
         const chunks = await pStream.request();
-        console.log("got chunks", chunks);
+        // console.log("got chunks", chunks);
         const raw = Buffer.concat(chunks);
         let {
           json: { reqObj, reqInit },
@@ -642,7 +642,7 @@ export default async function main() {
 
 main();
 
-class WrappedStream {
+class RequestStream {
   outbox = [];
   inbox = [];
   hasResponse = Promise.resolve();
