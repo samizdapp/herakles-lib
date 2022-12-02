@@ -415,29 +415,11 @@ export default async function main() {
 
   node.handle("/samizdapp-websocket", async ({ stream }) => {
     console.log("got websocket stream", stream);
-    const { value } = await stream.source.next();
-    const {
-      json: { type, url, protocols },
-    } = decode(Buffer.from(value.subarray()));
-    console.log("init", type, url, protocols);
-    if (type !== "URL") {
-      console.warn("first message expects URL");
-      return stream.close();
-    }
-    const ws = new WebSocket(url, protocols);
-    await wsOpen(ws)
-      .then(() => {
-        console.log("websocket open");
-        const wsRead = makeWebsocketReadStream(ws);
-        const wsWrite = makeWebSocketSink(ws);
 
-        pipe(wsRead, stream.sink);
+    const wsStream = new WebsocketStream(stream);
+    await wsStream.init();
 
-        pipe(stream.source, wsWrite);
-      })
-      .catch((e) => {
-        console.log("websocket stream error", e);
-      });
+    console.log("end websocket stream");
   });
 
   node.handle(
@@ -734,6 +716,177 @@ class RequestStream {
         headLength = 0;
         totalLength = 0;
         this.inboxTrigger();
+      }
+    }
+
+    this.close();
+  }
+}
+
+class Deferred {
+  constructor() {
+    this.promise = new Promise((resolve, reject) => {
+      this.resolve = resolve;
+      this.reject = reject;
+    });
+  }
+}
+
+class WebsocketStream {
+  chunkSize = 1026 * 64;
+  outbox = new Deferred();
+  inbox = new Deferred();
+
+  get isOpen() {
+    return this.stream.stat.timeline.close === undefined;
+  }
+
+  constructor(stream) {
+    this.stream = stream;
+  }
+
+  close() {
+    this.stream.close();
+  }
+
+  async handleCommand({ body }) {
+    try {
+      const { method, detail } = JSON.parse(body.toString());
+      console.log("handle command", method, detail);
+      switch (method) {
+        case "OPEN":
+          this.openWebsocket(detail);
+          break;
+        case "CLOSE":
+          this.closeWebsocket(detail);
+          break;
+        default:
+          console.log("unknown method", method);
+      }
+    } catch (error) {
+      console.log(body.toString());
+    }
+  }
+
+  encodeMessageToPacket(type, buffer) {
+    return encode({ type, bodyLength: buffer.byteLength }, buffer);
+  }
+
+  async openWebsocket({ url, protocols }) {
+    console.log("open websocket", url);
+    const ws = new WebSocket(url, protocols);
+    ws.onopen = () => {
+      this.sendStatus({ status: "OPENED" });
+    };
+    ws.onclose = () => {
+      this.sendStatus({ status: "CLOSED" });
+    };
+    ws.onerror = (error) => {
+      this.sendStatus({ status: "ERROR", error });
+    };
+    ws.onmessage = (evt) => {
+      // console.log("upstream message", evt.data, JSON.parse(evt.data));
+      const body =
+        evt.data instanceof Buffer ? evt.data : Buffer.from(evt.data, "ascii");
+      const packet = this.encodeMessageToPacket("MESSAGE", body);
+      this.send(packet);
+    };
+    this.ws = ws;
+  }
+
+  async sendStatus({ status, error }) {
+    console.log("send status", status, error);
+    const packet = this.encodeMessageToPacket(
+      "STATUS",
+      Buffer.from(JSON.stringify({ status, error }))
+    );
+    this.send(packet);
+  }
+
+  async send(data) {
+    this.outbox.resolve(data);
+    this.outbox = new Deferred();
+  }
+
+  async closeWebsocket() {
+    this.ws.close();
+  }
+
+  handleMessage({ body }) {
+    try {
+      console.log("handle message", body);
+      this.ws.send(body);
+    } catch (error) {
+      console.log("handleMessage error", error);
+    }
+  }
+
+  async dispatch(packet) {
+    switch (packet.json.type) {
+      case "COMMAND":
+        return this.handleCommand(packet);
+      case "MESSAGE":
+        return this.handleMessage(packet);
+      default:
+        console.warn("invalid packet type", packet.json.type);
+    }
+  }
+
+  async init() {
+    console.log("init websocket stream");
+    const that = this;
+    this.stream.sink(
+      (async function* () {
+        while (true) {
+          const packet = await that.outbox.promise;
+
+          const parts = [];
+          for (
+            let i = 0;
+            i <= Math.floor(packet.length / that.chunkSize);
+            i++
+          ) {
+            parts.push(
+              packet.subarray(i * that.chunkSize, (i + 1) * that.chunkSize)
+            );
+          }
+
+          for await (const chunk of parts) {
+            console.log("send chunk", chunk);
+            yield chunk;
+          }
+        }
+      })()
+    );
+
+    let currentLength = 0;
+    let headLength = 0;
+    let totalLength = 0;
+    let inbox = [];
+    for await (const chunk of this.stream.source) {
+      const buf = Buffer.from(chunk.subarray());
+      if (buf.byteLength === 1 && buf[0] === 0x00) {
+        console.log("ignore null byte");
+        continue;
+      }
+      inbox.push(buf);
+      if (headLength === 0) {
+        // console.log("read buf", buf);
+        headLength = buf.readUInt16BE(0) + 2;
+      }
+      currentLength += buf.length;
+      let packet;
+      if (totalLength === 0 && currentLength >= headLength) {
+        packet = decode(Buffer.concat(inbox));
+        totalLength = (packet?.json?.bodyLength ?? 0) + headLength;
+      }
+      if (currentLength === totalLength) {
+        packet = packet || decode(Buffer.concat(inbox));
+        currentLength = 0;
+        headLength = 0;
+        totalLength = 0;
+        inbox = [];
+        this.dispatch(packet);
       }
     }
 
