@@ -163,12 +163,14 @@ async function* makeWatcher(file_path, id = webcrypto.randomUUID()) {
 
 async function pollDial(node, addr) {
   console.log("dial", addr);
-  let conn = null;
+  let conn = null,
+    attempts = 0;
   do {
     conn = await node.dialProtocol(addr, "/samizdapp-heartbeat").catch((e) => {
       return new Promise((r) => setTimeout(r, 10000));
     });
-  } while (!conn);
+    attempts++;
+  } while (!conn && attempts < 10);
   return conn;
 }
 
@@ -231,7 +233,7 @@ async function dialRelays(node, makeRelayStream) {
   const relayStream = makeRelayStream();
   let relay;
   while ((relay = (await relayStream.next()).value)) {
-    //keepalive(node, relay);
+    keepalive(node, relay);
   }
 }
 
