@@ -13,22 +13,49 @@ async function main() {
   if (!nodeAddr) {
     throw new Error("Node address is required.");
   }
-
   const node = await createLibp2p({
     transports: [new WebSockets()],
     connectionEncryption: [new Noise()],
     streamMuxers: [new Mplex()],
     connectionManager: {
       dialTimeout: 60000,
+      autoDial: false,
     },
   });
 
+  node.connectionManager.addEventListener("peer:connect", (evt) => {
+    const connection = evt.detail;
+    console.log(`Connected to ${connection.remotePeer.toString()}`);
+    // console.log(connection);
+  });
+
+  node.connectionManager.addEventListener("peer:disconnect", (evt) => {
+    const connection = evt.detail;
+    console.log(`disconnected from ${connection.remotePeer.toString()}`);
+    // console.log(connection);
+  });
+
+  node.addEventListener("peer:discovery", (evt) => {
+    console.log("peer:discovery", evt);
+  });
+
   await node.start();
-  console.log(`Node started with id ${node.peerId.toString()}`);
 
-  const conn = await node.dial(nodeAddr);
+  while (true) {
+    console.log(`Node started with id ${node.peerId.toString()}`);
 
-  console.log(`Connected to the node via ${conn.remoteAddr.toString()}`, conn);
+    const conn = await node.dialProtocol(nodeAddr, "/samizdapp-heartbeat");
+
+    console.log(`Connected to the node via `, conn);
+    for await (const msg of conn.source) {
+      console.log(
+        "received message: ",
+        Buffer.from(msg.subarray()).toString("hex")
+      );
+    }
+
+    console.log("Connection closed");
+  }
 
   return 0;
 }

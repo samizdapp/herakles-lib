@@ -163,19 +163,24 @@ async function* makeWatcher(file_path, id = webcrypto.randomUUID()) {
 
 async function pollDial(node, addr) {
   console.log("dial", addr);
-  let conn = null;
+  let conn = null,
+    attempts = 0;
   do {
     conn = await node.dialProtocol(addr, "/samizdapp-heartbeat").catch((e) => {
-      console.warn(e);
       return new Promise((r) => setTimeout(r, 10000));
     });
-  } while (!conn);
+    attempts++;
+  } while (!conn && attempts < 10);
   return conn;
 }
 
 async function keepalive(node, addr) {
   while (true) {
     const raw = await pollDial(node, addr);
+    if (!raw) {
+      console.log("abandon keepalive", addr);
+      break;
+    }
     console.log("got keepalive stream", addr);
     const stream = new RawStream(raw);
 
@@ -314,14 +319,16 @@ export default async function main() {
       enabled: true,
       hop: {
         enabled: true,
+        timeout: 10e8,
       },
       advertise: {
         enabled: true,
       },
     },
-    // connectionManager: {
-    //   autoDial: false, // Auto connect to discovered peers (limited by ConnectionManager minConnections)
-    //   minConnections: 0,
+    connectionManager: {
+      autoDial: false, // Auto connect to discovered peers (limited by ConnectionManager minConnections)
+    },
+    // minConnections: 0,
     //   maxDialsPerPeer: 10
     //   // The `tag` property will be searched when creating the instance of your Peer Discovery service.
     //   // The associated object, will be passed to the service when it is instantiated.
@@ -570,18 +577,6 @@ export default async function main() {
       maxInboundStreams: 100,
     }
   );
-
-  node.connectionManager.addEventListener("peer:connect", (evt) => {
-    const connection = evt.detail;
-    // console.log(`Connected to ${connection.remotePeer.toString()}`);
-    // console.log(connection)
-  });
-
-  node.connectionManager.addEventListener("peer:disconnect", (evt) => {
-    const connection = evt.detail;
-    // console.log(`disconnected from ${connection.remotePeer.toString()}`);
-    // console.log(connection)
-  });
 
   console.log("libp2p has started");
 
