@@ -177,6 +177,10 @@ async function pollDial(node, addr) {
 async function keepalive(node, addr) {
   while (true) {
     const raw = await pollDial(node, addr);
+    if (!raw) {
+      console.log("abandon keepalive", addr);
+      break;
+    }
     console.log("got keepalive stream", addr);
     const stream = new RawStream(raw);
 
