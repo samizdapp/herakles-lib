@@ -166,7 +166,6 @@ async function pollDial(node, addr) {
   let conn = null;
   do {
     conn = await node.dialProtocol(addr, "/samizdapp-heartbeat").catch((e) => {
-      console.warn(e);
       return new Promise((r) => setTimeout(r, 10000));
     });
   } while (!conn);
@@ -232,7 +231,7 @@ async function dialRelays(node, makeRelayStream) {
   const relayStream = makeRelayStream();
   let relay;
   while ((relay = (await relayStream.next()).value)) {
-    keepalive(node, relay);
+    //keepalive(node, relay);
   }
 }
 
@@ -314,14 +313,16 @@ export default async function main() {
       enabled: true,
       hop: {
         enabled: true,
+        timeout: 10e8,
       },
       advertise: {
         enabled: true,
       },
     },
-    // connectionManager: {
-    //   autoDial: false, // Auto connect to discovered peers (limited by ConnectionManager minConnections)
-    //   minConnections: 0,
+    connectionManager: {
+      autoDial: false, // Auto connect to discovered peers (limited by ConnectionManager minConnections)
+    },
+    // minConnections: 0,
     //   maxDialsPerPeer: 10
     //   // The `tag` property will be searched when creating the instance of your Peer Discovery service.
     //   // The associated object, will be passed to the service when it is instantiated.
@@ -570,18 +571,6 @@ export default async function main() {
       maxInboundStreams: 100,
     }
   );
-
-  node.connectionManager.addEventListener("peer:connect", (evt) => {
-    const connection = evt.detail;
-    // console.log(`Connected to ${connection.remotePeer.toString()}`);
-    // console.log(connection)
-  });
-
-  node.connectionManager.addEventListener("peer:disconnect", (evt) => {
-    const connection = evt.detail;
-    // console.log(`disconnected from ${connection.remotePeer.toString()}`);
-    // console.log(connection)
-  });
 
   console.log("libp2p has started");
 
