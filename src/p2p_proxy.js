@@ -20,6 +20,7 @@ import { mapPort } from "./upnp.js";
 import { webcrypto } from "crypto";
 import WebSocket from "ws";
 import { KEEP_ALIVE } from "@libp2p/interface-peer-store/tags";
+import { EventEmitter } from "events";
 
 const CHUNK_SIZE = 1024 * 64;
 
@@ -161,25 +162,30 @@ async function* makeWatcher(file_path, id = webcrypto.randomUUID()) {
 }
 
 async function pollDial(node, addr) {
-  // console.log("dial", addr);
+  console.log("dial", addr);
   let conn = null;
   do {
-    conn = await node
-      .dial(addr)
-      .catch((e) => new Promise((r) => setTimeout(r, 10000)));
+    conn = await node.dialProtocol(addr, "/samizdapp-heartbeat").catch((e) => {
+      console.warn(e);
+      return new Promise((r) => setTimeout(r, 10000));
+    });
   } while (!conn);
-  await node.peerStore.tagPeer(conn.remotePeer, KEEP_ALIVE).catch((e) => {
-    // throws an error if already tagged, ignore
-    // console.warn(e);
-  });
   return conn;
 }
 
 async function keepalive(node, addr) {
   while (true) {
-    await pollDial(node, addr);
-    console.log("keepalive", addr);
-    await new Promise((r) => setTimeout(r, 60000));
+    const raw = await pollDial(node, addr);
+    console.log("got keepalive stream", addr);
+    const stream = new RawStream(raw);
+
+    let read = null,
+      timeout = null;
+    while (stream.isOpen && (read = await stream.read()) !== null) {
+      clearTimeout(timeout);
+      timeout = setTimeout(stream.close.bind(stream), 10000);
+    }
+    console.log("keepalive stream down", addr);
   }
 }
 
@@ -367,18 +373,6 @@ export default async function main() {
     // abort();
   });
 
-  node.handle("/samizdapp-socket", async ({ stream }) => {
-    const source = intostream(stream.source);
-    const sink = intostream(stream.sink);
-    const socket = new Socket();
-    await new Promise((resolve, reject) => {
-      socket.on("error", reject);
-      socket.connect(8888, "localhost", resolve);
-    });
-
-    source.pipe(socket).pipe(sink);
-  });
-
   const readNextLob = async (ws) =>
     new Promise(
       (r) =>
@@ -388,30 +382,15 @@ export default async function main() {
         })
     );
 
-  const writeNextLob = (ws, msg) => {
-    ws.send(decode(Buffer.from(msg.subarray())).body);
-  };
+  node.handle("/samizdapp-heartbeat", async ({ stream, connection }) => {
+    const raw = new RawStream(stream);
 
-  async function* makeWebsocketReadStream(ws) {
-    while (ws.readyState == 1) {
-      yield readNextLob(ws);
+    while (raw.isOpen) {
+      raw.write(Buffer.from("deadbeef", "hex"));
+
+      await new Promise((r) => setTimeout(r, 5000));
     }
-  }
-
-  function makeWebSocketSink(ws) {
-    return async (source) => {
-      for await (const value of source) {
-        await writeNextLob(ws, value);
-      }
-    };
-  }
-
-  const wsOpen = async (ws) => {
-    return new Promise((resolve, reject) => {
-      ws.onopen = resolve;
-      ws.onerror = reject;
-    });
-  };
+  });
 
   node.handle("/samizdapp-websocket", async ({ stream }) => {
     console.log("got websocket stream", stream);
@@ -891,5 +870,71 @@ class WebsocketStream {
     }
 
     this.close();
+  }
+}
+
+class RawStream extends EventEmitter {
+  readDeferred = new Deferred();
+  writeDeferred = new Deferred();
+
+  get isOpen() {
+    return this.libp2pStream.stat.timeline.close === undefined;
+  }
+
+  get protocol() {
+    return this.libp2pStream.stat.protocol;
+  }
+
+  constructor(libp2pStream, ports) {
+    super();
+    this.libp2pStream = libp2pStream;
+    this.libp2pStream.sink(this.sink());
+    this.source();
+  }
+
+  async read() {
+    return this.readDeferred.promise.then((data) => {
+      // console.trace("read", data);
+      return data;
+    });
+  }
+
+  async write(data) {
+    return this._write(data);
+  }
+
+  async *sink() {
+    let data = null;
+    while (this.isOpen && (data = await this.writeDeferred.promise) != null) {
+      // console.trace("sink", data);
+      yield data;
+    }
+  }
+
+  _write(data) {
+    // console.trace("_write", data);
+    this.writeDeferred.resolve(data);
+    this.writeDeferred = new Deferred();
+  }
+
+  _read(data) {
+    // console.trace("_read", data);
+    this.readDeferred.resolve(data);
+    this.readDeferred = new Deferred();
+  }
+
+  async source() {
+    for await (const data of this.libp2pStream.source) {
+      this._read(Buffer.from(data.subarray()));
+    }
+
+    // console.trace("source", "end");
+    this.close();
+  }
+
+  close() {
+    this.libp2pStream.close();
+    this.readDeferred.resolve(null);
+    this.writeDeferred.resolve(null);
   }
 }
