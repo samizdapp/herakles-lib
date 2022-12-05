@@ -644,20 +644,22 @@ class RequestStream {
   }
 
   async open() {
-    this.stream.sink(
-      (async function* (wrapped) {
-        while (true) {
-          await new Promise((r) => {
-            wrapped.outboxTrigger = r;
-          });
+    this.stream
+      .sink(
+        (async function* (wrapped) {
+          while (true) {
+            await new Promise((r) => {
+              wrapped.outboxTrigger = r;
+            });
 
-          for await (const chunk of wrapped.outbox) {
-            // console.log("send chunk", chunk);
-            yield chunk;
+            for await (const chunk of wrapped.outbox) {
+              // console.log("send chunk", chunk);
+              yield chunk;
+            }
           }
-        }
-      })(this)
-    );
+        })(this)
+      )
+      .catch((e) => console.log("error in sink", e));
 
     let currentLength = 0;
     let headLength = 0;
@@ -818,29 +820,31 @@ class WebsocketStream {
   async init() {
     console.log("init websocket stream");
     const that = this;
-    this.stream.sink(
-      (async function* () {
-        while (true) {
-          const packet = await that.outbox.promise;
+    this.stream
+      .sink(
+        (async function* () {
+          while (true) {
+            const packet = await that.outbox.promise;
 
-          const parts = [];
-          for (
-            let i = 0;
-            i <= Math.floor(packet.length / that.chunkSize);
-            i++
-          ) {
-            parts.push(
-              packet.subarray(i * that.chunkSize, (i + 1) * that.chunkSize)
-            );
-          }
+            const parts = [];
+            for (
+              let i = 0;
+              i <= Math.floor(packet.length / that.chunkSize);
+              i++
+            ) {
+              parts.push(
+                packet.subarray(i * that.chunkSize, (i + 1) * that.chunkSize)
+              );
+            }
 
-          for await (const chunk of parts) {
-            // console.log("send chunk", chunk);
-            yield chunk;
+            for await (const chunk of parts) {
+              // console.log("send chunk", chunk);
+              yield chunk;
+            }
           }
-        }
-      })()
-    );
+        })()
+      )
+      .catch((e) => console.log("error in sink", e));
 
     let currentLength = 0;
     let headLength = 0;
@@ -892,7 +896,7 @@ class RawStream extends EventEmitter {
   constructor(libp2pStream, ports) {
     super();
     this.libp2pStream = libp2pStream;
-    this.libp2pStream.sink(this.sink());
+    this.libp2pStream.sink(this.sink()).catch((e) => console.log("error", e));
     this.source();
   }
 
