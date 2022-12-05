@@ -2,6 +2,10 @@ import { exec } from "child_process";
 import { promisify } from "node:util";
 const execProm = promisify(exec);
 
+const listUPNP = async () => {
+  return execProm("upnpc -l");
+};
+
 export const mapPort = async (privatePort, skipRetry = false) => {
   let success = false,
     publicPort = privatePort - 1;
@@ -9,6 +13,13 @@ export const mapPort = async (privatePort, skipRetry = false) => {
   let retry = 2;
   if (process.env.SKIP_UPNP == "true") {
     console.log("skip UPNP");
+    return { success: false, publicPort: "" };
+  }
+
+  try {
+    await listUPNP();
+  } catch (e) {
+    // upnp completely not available
     return { success: false, publicPort: "" };
   }
 

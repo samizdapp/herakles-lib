@@ -171,6 +171,7 @@ async function pollDial(node, addr) {
     });
     attempts++;
   } while (!conn && attempts < 10);
+  console.log("got heartbeat stream", addr);
   return conn;
 }
 
@@ -391,7 +392,7 @@ export default async function main() {
 
   node.handle("/samizdapp-heartbeat", async ({ stream, connection }) => {
     const raw = new RawStream(stream);
-
+    console.log("got heartbeat stream");
     while (raw.isOpen) {
       raw.write(Buffer.from("deadbeef", "hex"));
 
