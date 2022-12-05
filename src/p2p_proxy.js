@@ -644,58 +644,62 @@ class RequestStream {
   }
 
   async open() {
-    this.stream
-      .sink(
-        (async function* (wrapped) {
-          while (true) {
-            await new Promise((r) => {
-              wrapped.outboxTrigger = r;
-            });
+    try {
+      this.stream
+        .sink(
+          (async function* (wrapped) {
+            while (true) {
+              await new Promise((r) => {
+                wrapped.outboxTrigger = r;
+              });
 
-            for await (const chunk of wrapped.outbox) {
-              // console.log("send chunk", chunk);
-              yield chunk;
+              for await (const chunk of wrapped.outbox) {
+                // console.log("send chunk", chunk);
+                yield chunk;
+              }
             }
-          }
-        })(this)
-      )
-      .catch((e) => console.log("error in sink", e));
+          })(this)
+        )
+        .catch((e) => console.log("error in sink", e));
 
-    let currentLength = 0;
-    let headLength = 0;
-    let totalLength = 0;
-    for await (const chunk of this.stream.source) {
-      const buf = Buffer.from(chunk.subarray());
-      if (buf.byteLength === 1 && buf[0] === 0x00) {
-        console.log("ignore null byte");
-        continue;
+      let currentLength = 0;
+      let headLength = 0;
+      let totalLength = 0;
+      for await (const chunk of this.stream.source) {
+        const buf = Buffer.from(chunk.subarray());
+        if (buf.byteLength === 1 && buf[0] === 0x00) {
+          console.log("ignore null byte");
+          continue;
+        }
+        this.inbox.push(buf);
+        if (headLength === 0) {
+          // console.log("read buf", buf);
+          headLength = buf.readUInt16BE(0) + 2;
+        }
+        currentLength += buf.length;
+        if (totalLength === 0 && currentLength >= headLength) {
+          const packet = decode(Buffer.concat(this.inbox));
+          totalLength = (packet?.json?.bodyLength ?? 0) + headLength;
+        }
+        // console.log(
+        //   "chunk",
+        //   currentLength,
+        //   headLength,
+        //   totalLength,
+        //   totalLength === 0 && currentLength >= headLength
+        // );
+        if (currentLength === totalLength) {
+          currentLength = 0;
+          headLength = 0;
+          totalLength = 0;
+          this.inboxTrigger();
+        }
       }
-      this.inbox.push(buf);
-      if (headLength === 0) {
-        // console.log("read buf", buf);
-        headLength = buf.readUInt16BE(0) + 2;
-      }
-      currentLength += buf.length;
-      if (totalLength === 0 && currentLength >= headLength) {
-        const packet = decode(Buffer.concat(this.inbox));
-        totalLength = (packet?.json?.bodyLength ?? 0) + headLength;
-      }
-      // console.log(
-      //   "chunk",
-      //   currentLength,
-      //   headLength,
-      //   totalLength,
-      //   totalLength === 0 && currentLength >= headLength
-      // );
-      if (currentLength === totalLength) {
-        currentLength = 0;
-        headLength = 0;
-        totalLength = 0;
-        this.inboxTrigger();
-      }
+
+      this.close();
+    } catch (e) {
+      console.log("error in open", e);
     }
-
-    this.close();
   }
 }
 
@@ -819,65 +823,69 @@ class WebsocketStream {
 
   async init() {
     console.log("init websocket stream");
-    const that = this;
-    this.stream
-      .sink(
-        (async function* () {
-          while (true) {
-            const packet = await that.outbox.promise;
+    try {
+      const that = this;
+      this.stream
+        .sink(
+          (async function* () {
+            while (true) {
+              const packet = await that.outbox.promise;
 
-            const parts = [];
-            for (
-              let i = 0;
-              i <= Math.floor(packet.length / that.chunkSize);
-              i++
-            ) {
-              parts.push(
-                packet.subarray(i * that.chunkSize, (i + 1) * that.chunkSize)
-              );
+              const parts = [];
+              for (
+                let i = 0;
+                i <= Math.floor(packet.length / that.chunkSize);
+                i++
+              ) {
+                parts.push(
+                  packet.subarray(i * that.chunkSize, (i + 1) * that.chunkSize)
+                );
+              }
+
+              for await (const chunk of parts) {
+                // console.log("send chunk", chunk);
+                yield chunk;
+              }
             }
+          })()
+        )
+        .catch((e) => console.log("error in sink", e));
 
-            for await (const chunk of parts) {
-              // console.log("send chunk", chunk);
-              yield chunk;
-            }
-          }
-        })()
-      )
-      .catch((e) => console.log("error in sink", e));
+      let currentLength = 0;
+      let headLength = 0;
+      let totalLength = 0;
+      let inbox = [];
+      for await (const chunk of this.stream.source) {
+        const buf = Buffer.from(chunk.subarray());
+        if (buf.byteLength === 1 && buf[0] === 0x00) {
+          console.log("ignore null byte");
+          continue;
+        }
+        inbox.push(buf);
+        if (headLength === 0) {
+          // console.log("read buf", buf);
+          headLength = buf.readUInt16BE(0) + 2;
+        }
+        currentLength += buf.length;
+        let packet;
+        if (totalLength === 0 && currentLength >= headLength) {
+          packet = decode(Buffer.concat(inbox));
+          totalLength = (packet?.json?.bodyLength ?? 0) + headLength;
+        }
+        if (currentLength === totalLength) {
+          packet = packet || decode(Buffer.concat(inbox));
+          currentLength = 0;
+          headLength = 0;
+          totalLength = 0;
+          inbox = [];
+          this.dispatch(packet);
+        }
+      }
 
-    let currentLength = 0;
-    let headLength = 0;
-    let totalLength = 0;
-    let inbox = [];
-    for await (const chunk of this.stream.source) {
-      const buf = Buffer.from(chunk.subarray());
-      if (buf.byteLength === 1 && buf[0] === 0x00) {
-        console.log("ignore null byte");
-        continue;
-      }
-      inbox.push(buf);
-      if (headLength === 0) {
-        // console.log("read buf", buf);
-        headLength = buf.readUInt16BE(0) + 2;
-      }
-      currentLength += buf.length;
-      let packet;
-      if (totalLength === 0 && currentLength >= headLength) {
-        packet = decode(Buffer.concat(inbox));
-        totalLength = (packet?.json?.bodyLength ?? 0) + headLength;
-      }
-      if (currentLength === totalLength) {
-        packet = packet || decode(Buffer.concat(inbox));
-        currentLength = 0;
-        headLength = 0;
-        totalLength = 0;
-        inbox = [];
-        this.dispatch(packet);
-      }
+      this.close();
+    } catch (error) {
+      console.log("error in init ", error);
     }
-
-    this.close();
   }
 }
 
@@ -932,12 +940,16 @@ class RawStream extends EventEmitter {
   }
 
   async source() {
-    for await (const data of this.libp2pStream.source) {
-      this._read(Buffer.from(data.subarray()));
+    try {
+      for await (const data of this.libp2pStream.source) {
+        this._read(Buffer.from(data.subarray()));
+      }
+    } catch (e) {
+      console.log("error in source", e);
+    } finally {
+      // console.trace("source", "end");
+      this.close();
     }
-
-    // console.trace("source", "end");
-    this.close();
   }
 
   close() {
