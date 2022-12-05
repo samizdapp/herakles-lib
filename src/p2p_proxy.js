@@ -940,12 +940,16 @@ class RawStream extends EventEmitter {
   }
 
   async source() {
-    for await (const data of this.libp2pStream.source) {
-      this._read(Buffer.from(data.subarray()));
+    try {
+      for await (const data of this.libp2pStream.source) {
+        this._read(Buffer.from(data.subarray()));
+      }
+    } catch (e) {
+      console.log("error in source", e);
+    } finally {
+      // console.trace("source", "end");
+      this.close();
     }
-
-    // console.trace("source", "end");
-    this.close();
   }
 
   close() {
