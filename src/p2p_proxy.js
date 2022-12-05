@@ -749,14 +749,21 @@ class WebsocketStream {
   async openWebsocket({ url, protocols }) {
     console.log("open websocket", url);
     const ws = new WebSocket(url, protocols);
-    ws.onopen = () => {
-      this.sendStatus({ status: "OPENED" });
+    ws.onopen = (event) => {
+      this.sendStatus({ status: "OPENED", detail: event });
     };
-    ws.onclose = () => {
-      this.sendStatus({ status: "CLOSED" });
+    ws.onclose = (event) => {
+      this.sendStatus({
+        status: "CLOSED",
+        detail: {
+          code: event[Symbol.for("kCode")],
+          wasClean: event[Symbol.for("kWasClean")],
+          reason: event[Symbol.for("kReason")],
+        },
+      });
     };
     ws.onerror = (error) => {
-      this.sendStatus({ status: "ERROR", error });
+      this.sendStatus({ status: "ERROR", detail: error });
     };
     ws.onmessage = (evt) => {
       // console.log("upstream message", evt.data, JSON.parse(evt.data));
@@ -768,11 +775,13 @@ class WebsocketStream {
     this.ws = ws;
   }
 
-  async sendStatus({ status, error }) {
-    console.log("send status", status, error);
+  async sendStatus({ status, detail }) {
+    console.log("send status", status, detail);
     const packet = this.encodeMessageToPacket(
       "STATUS",
-      Buffer.from(JSON.stringify({ status, error }))
+      Buffer.from(
+        JSON.stringify({ status, detail: JSON.parse(JSON.stringify(detail)) })
+      )
     );
     this.send(packet);
   }
@@ -826,7 +835,7 @@ class WebsocketStream {
           }
 
           for await (const chunk of parts) {
-            console.log("send chunk", chunk);
+            // console.log("send chunk", chunk);
             yield chunk;
           }
         }
