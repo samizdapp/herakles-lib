@@ -21,6 +21,12 @@ import { webcrypto } from "crypto";
 import WebSocket from "ws";
 import { KEEP_ALIVE } from "@libp2p/interface-peer-store/tags";
 import { EventEmitter } from "events";
+import { exec } from "child_process";
+import { promisify } from "node:util";
+import dns from "dns/promises";
+import http from "http";
+import https from "https";
+const execProm = promisify(exec);
 
 const CHUNK_SIZE = 1024 * 64;
 
@@ -74,6 +80,8 @@ const getIP = async (nat) =>
 
 const YGGDRASIL_PEERS = "/yggdrasil/peers";
 
+const ygDomainMap = new Map();
+
 const getRelayAddrs = async (peerId) => {
   const yg_peers = (
     await readFile(YGGDRASIL_PEERS).catch((e) => Buffer.from(""))
@@ -89,7 +97,9 @@ const getRelayAddrs = async (peerId) => {
 
     const p1 = host.slice(0, host.length - 1);
     const p2 = host.slice(host.length - 1);
-    const fetchaddr = `https://yggdrasil.${p1}.${p2}.yg/libp2p.relay`;
+    const domain = `${p1}.${p2}.yg`;
+    ygDomainMap.set(domain, ip_part);
+    const fetchaddr = `${domain}/libp2p.relay`;
     // console.log("try relay", fetchaddr);
     proms.push(
       fetch(fetchaddr)
@@ -178,6 +188,7 @@ async function keepalive(node, addr) {
     const raw = await pollDial(node, addr);
     if (!raw) {
       console.log("abandon keepalive", addr);
+
       break;
     }
     console.log("got keepalive stream", addr);
@@ -544,6 +555,7 @@ export default async function main() {
 
         console.log("do fetch", url); //, init, init.body ? init.body : '')
         try {
+          init.agent = staticDnsAgent(url);
           fres = await fetch(url, init);
 
           const resb = await fres.arrayBuffer();
@@ -680,13 +692,13 @@ class RequestStream {
           const packet = decode(Buffer.concat(this.inbox));
           totalLength = (packet?.json?.bodyLength ?? 0) + headLength;
         }
-        // console.log(
-        //   "chunk",
-        //   currentLength,
-        //   headLength,
-        //   totalLength,
-        //   totalLength === 0 && currentLength >= headLength
-        // );
+        console.log(
+          "chunk",
+          currentLength,
+          headLength,
+          totalLength,
+          totalLength === 0 && currentLength >= headLength
+        );
         if (currentLength === totalLength) {
           currentLength = 0;
           headLength = 0;
@@ -956,4 +968,50 @@ class RawStream extends EventEmitter {
     this.readDeferred.resolve(null);
     this.writeDeferred.resolve(null);
   }
+}
+
+async function justInTimeDNS(hostname) {
+  try {
+    console.log("jit dns", hostname);
+    if (hostname.endsWith(".localhost")) {
+      console.log('hostname ends with ".localhost"');
+      const hosts = await readFile("/etc/hosts", "utf8");
+      console.log("got hosts", hosts, hostname);
+      if (!hosts.includes(hostname)) {
+        console.log("adding hostname to /etc/hosts", hostname);
+        await execProm(`echo "127.0.0.1 ${hostname}" >> /etc/hosts`);
+      }
+    }
+  } catch (e) {
+    console.log("error in jit dns", e);
+  }
+}
+
+const staticLookup = () => async (hostname, _, cb) => {
+  if (hostname.endsWith(".localhost")) {
+    console.log("intercepting localhost", hostname);
+    return cb(null, "127.0.0.1", 4);
+  }
+
+  if (hostname.endsWith(".yg")) {
+    console.log("intercepting yg", hostname);
+    const ip = ygDomainMap.get(hostname);
+    if (ip) {
+      return cb(null, ip, 4);
+    }
+  }
+
+  const ips = await dns.resolve(hostname).catch((e) => []);
+
+  if (ips.length === 0) {
+    return cb(new Error(`Unable to resolve ${hostname}`));
+  }
+
+  cb(null, ips[0], 4);
+};
+
+function staticDnsAgent(url) {
+  const _u = new URL(url);
+  const httpModule = _u.protocol === "http:" ? http : https;
+  return new httpModule.Agent({ lookup: staticLookup() });
 }
